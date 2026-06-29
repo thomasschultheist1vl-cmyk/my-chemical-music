@@ -1,0 +1,6 @@
+*.exe
+build/
+build-*/
+*.user
+.qtc_clangd/
+.qtcreator/
