@@ -1,0 +1,5 @@
+C:/xampp/htdocs/my-chemical-music/build/mcm_qt_release_deploy/CMakeFiles/mcm_qt.dir
+C:/xampp/htdocs/my-chemical-music/build/mcm_qt_release_deploy/CMakeFiles/edit_cache.dir
+C:/xampp/htdocs/my-chemical-music/build/mcm_qt_release_deploy/CMakeFiles/rebuild_cache.dir
+C:/xampp/htdocs/my-chemical-music/build/mcm_qt_release_deploy/CMakeFiles/mcm_qt_autogen_timestamp_deps.dir
+C:/xampp/htdocs/my-chemical-music/build/mcm_qt_release_deploy/CMakeFiles/mcm_qt_autogen.dir

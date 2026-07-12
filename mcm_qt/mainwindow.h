@@ -79,7 +79,7 @@ private:
     bool showVentaDetalleDialog(int &idProducto, int &cantidad);
     bool showCompraHeaderDialog(int &idProveedor, QString &fecha);
     bool showCompraDetalleDialog(int &idProducto, int &cantidad, double &precioCompra);
-    bool showFacturaDialog(int &idVenta, QString &numeroFactura, QString &tipoFactura, QString &fecha, double &total);
+    bool showFacturaDialog(int &idVenta, int &idServicio, QString &numeroFactura, QString &tipoFactura, QString &fecha, double &total);
     int selectedClienteId() const;
     void addCliente();
     void editCliente();

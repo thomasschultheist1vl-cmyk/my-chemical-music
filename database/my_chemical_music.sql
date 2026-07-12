@@ -157,7 +157,8 @@ INSERT INTO `estados_servicio` (`id_estado_servicio`, `nombre`) VALUES
 
 CREATE TABLE `facturas` (
   `id_factura` int(11) NOT NULL,
-  `id_venta` int(11) NOT NULL,
+  `id_venta` int(11) DEFAULT NULL,
+  `id_servicio` int(11) DEFAULT NULL,
   `numero_factura` varchar(30) NOT NULL,
   `tipo_factura` varchar(10) NOT NULL,
   `fecha` date NOT NULL,
@@ -168,8 +169,8 @@ CREATE TABLE `facturas` (
 -- Volcado de datos para la tabla `facturas`
 --
 
-INSERT INTO `facturas` (`id_factura`, `id_venta`, `numero_factura`, `tipo_factura`, `fecha`, `total`) VALUES
-(1, 1, 'F0001', 'B', '2026-06-12', 350000.00);
+INSERT INTO `facturas` (`id_factura`, `id_venta`, `id_servicio`, `numero_factura`, `tipo_factura`, `fecha`, `total`) VALUES
+(1, 1, NULL, 'F0001', 'B', '2026-06-12', 350000.00);
 
 -- --------------------------------------------------------
 
@@ -355,7 +356,8 @@ ALTER TABLE `estados_servicio`
 --
 ALTER TABLE `facturas`
   ADD PRIMARY KEY (`id_factura`),
-  ADD UNIQUE KEY `id_venta` (`id_venta`);
+  ADD UNIQUE KEY `id_venta` (`id_venta`),
+  ADD UNIQUE KEY `id_servicio` (`id_servicio`);
 
 --
 -- Indices de la tabla `marcas`
@@ -510,7 +512,8 @@ ALTER TABLE `detalle_ventas`
 -- Filtros para la tabla `facturas`
 --
 ALTER TABLE `facturas`
-  ADD CONSTRAINT `facturas_ibfk_1` FOREIGN KEY (`id_venta`) REFERENCES `ventas` (`id_venta`);
+  ADD CONSTRAINT `facturas_ibfk_1` FOREIGN KEY (`id_venta`) REFERENCES `ventas` (`id_venta`),
+  ADD CONSTRAINT `facturas_ibfk_2` FOREIGN KEY (`id_servicio`) REFERENCES `servicios` (`id_servicio`);
 
 --
 -- Filtros para la tabla `productos`

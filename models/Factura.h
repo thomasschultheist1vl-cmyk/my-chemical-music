@@ -8,6 +8,7 @@ class Factura {
 private:
     int idFactura;
     int idVenta;
+    int idServicio;
     string numeroFactura;
     string tipoFactura;
     string fecha;
@@ -16,9 +17,10 @@ private:
 public:
     Factura() {}
 
-    Factura(int idFactura, int idVenta, string numeroFactura, string tipoFactura, string fecha, float total) {
+    Factura(int idFactura, int idVenta, int idServicio, string numeroFactura, string tipoFactura, string fecha, float total) {
         this->idFactura = idFactura;
         this->idVenta = idVenta;
+        this->idServicio = idServicio;
         this->numeroFactura = numeroFactura;
         this->tipoFactura = tipoFactura;
         this->fecha = fecha;
@@ -27,6 +29,7 @@ public:
 
     int getIdFactura() { return idFactura; }
     int getIdVenta() { return idVenta; }
+    int getIdServicio() { return idServicio; }
     string getNumeroFactura() { return numeroFactura; }
     string getTipoFactura() { return tipoFactura; }
     string getFecha() { return fecha; }
@@ -34,6 +37,7 @@ public:
 
     void setIdFactura(int idFactura) { this->idFactura = idFactura; }
     void setIdVenta(int idVenta) { this->idVenta = idVenta; }
+    void setIdServicio(int idServicio) { this->idServicio = idServicio; }
     void setNumeroFactura(string numeroFactura) { this->numeroFactura = numeroFactura; }
     void setTipoFactura(string tipoFactura) { this->tipoFactura = tipoFactura; }
     void setFecha(string fecha) { this->fecha = fecha; }

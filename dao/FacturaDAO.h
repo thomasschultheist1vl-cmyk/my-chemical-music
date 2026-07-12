@@ -47,9 +47,12 @@ public:
 
             SQLAllocHandle(SQL_HANDLE_STMT, hDbc, &hStmt);
 
+            string idVenta = factura.getIdVenta() > 0 ? to_string(factura.getIdVenta()) : "NULL";
+            string idServicio = factura.getIdServicio() > 0 ? to_string(factura.getIdServicio()) : "NULL";
             string consulta =
-                "INSERT INTO facturas (id_venta, numero_factura, tipo_factura, fecha, total) VALUES (" +
-                to_string(factura.getIdVenta()) + ", '" +
+                "INSERT INTO facturas (id_venta, id_servicio, numero_factura, tipo_factura, fecha, total) VALUES (" +
+                idVenta + ", " +
+                idServicio + ", '" +
                 factura.getNumeroFactura() + "', '" +
                 factura.getTipoFactura() + "', '" +
                 factura.getFecha() + "', " +
@@ -78,12 +81,12 @@ public:
             SQLAllocHandle(SQL_HANDLE_STMT, hDbc, &hStmt);
 
             string consulta =
-                "SELECT id_factura, id_venta, numero_factura, tipo_factura, fecha, total FROM facturas";
+                "SELECT id_factura, id_venta, id_servicio, numero_factura, tipo_factura, fecha, total FROM facturas";
 
             SQLRETURN ret = SQLExecDirectA(hStmt, (SQLCHAR*)consulta.c_str(), SQL_NTS);
 
             if (SQL_SUCCEEDED(ret)) {
-                int idFactura, idVenta;
+                int idFactura, idVenta, idServicio;
                 char numeroFactura[30];
                 char tipoFactura[10];
                 char fecha[20];
@@ -95,15 +98,23 @@ public:
                 while (SQLFetch(hStmt) == SQL_SUCCESS) {
                     hayFacturas = true;
 
+                    idVenta = 0;
+                    idServicio = 0;
+
                     SQLGetData(hStmt, 1, SQL_C_LONG, &idFactura, 0, NULL);
                     SQLGetData(hStmt, 2, SQL_C_LONG, &idVenta, 0, NULL);
-                    SQLGetData(hStmt, 3, SQL_C_CHAR, numeroFactura, sizeof(numeroFactura), NULL);
-                    SQLGetData(hStmt, 4, SQL_C_CHAR, tipoFactura, sizeof(tipoFactura), NULL);
-                    SQLGetData(hStmt, 5, SQL_C_CHAR, fecha, sizeof(fecha), NULL);
-                    SQLGetData(hStmt, 6, SQL_C_FLOAT, &total, 0, NULL);
+                    SQLGetData(hStmt, 3, SQL_C_LONG, &idServicio, 0, NULL);
+                    SQLGetData(hStmt, 4, SQL_C_CHAR, numeroFactura, sizeof(numeroFactura), NULL);
+                    SQLGetData(hStmt, 5, SQL_C_CHAR, tipoFactura, sizeof(tipoFactura), NULL);
+                    SQLGetData(hStmt, 6, SQL_C_CHAR, fecha, sizeof(fecha), NULL);
+                    SQLGetData(hStmt, 7, SQL_C_FLOAT, &total, 0, NULL);
 
                     cout << "ID factura: " << idFactura << endl;
-                    cout << "ID venta: " << idVenta << endl;
+                    if (idVenta > 0) {
+                        cout << "Origen: Venta " << idVenta << endl;
+                    } else {
+                        cout << "Origen: Servicio " << idServicio << endl;
+                    }
                     cout << "Numero: " << numeroFactura << endl;
                     cout << "Tipo: " << tipoFactura << endl;
                     cout << "Fecha: " << fecha << endl;
@@ -133,29 +144,37 @@ public:
             SQLAllocHandle(SQL_HANDLE_STMT, hDbc, &hStmt);
 
             string consulta =
-                "SELECT id_factura, id_venta, numero_factura, tipo_factura, fecha, total "
+                "SELECT id_factura, id_venta, id_servicio, numero_factura, tipo_factura, fecha, total "
                 "FROM facturas WHERE id_factura = " + to_string(id);
 
             SQLRETURN ret = SQLExecDirectA(hStmt, (SQLCHAR*)consulta.c_str(), SQL_NTS);
 
             if (SQL_SUCCEEDED(ret)) {
-                int idFactura, idVenta;
+                int idFactura, idVenta, idServicio;
                 char numeroFactura[30];
                 char tipoFactura[10];
                 char fecha[20];
                 float total;
 
                 if (SQLFetch(hStmt) == SQL_SUCCESS) {
+                    idVenta = 0;
+                    idServicio = 0;
+
                     SQLGetData(hStmt, 1, SQL_C_LONG, &idFactura, 0, NULL);
                     SQLGetData(hStmt, 2, SQL_C_LONG, &idVenta, 0, NULL);
-                    SQLGetData(hStmt, 3, SQL_C_CHAR, numeroFactura, sizeof(numeroFactura), NULL);
-                    SQLGetData(hStmt, 4, SQL_C_CHAR, tipoFactura, sizeof(tipoFactura), NULL);
-                    SQLGetData(hStmt, 5, SQL_C_CHAR, fecha, sizeof(fecha), NULL);
-                    SQLGetData(hStmt, 6, SQL_C_FLOAT, &total, 0, NULL);
+                    SQLGetData(hStmt, 3, SQL_C_LONG, &idServicio, 0, NULL);
+                    SQLGetData(hStmt, 4, SQL_C_CHAR, numeroFactura, sizeof(numeroFactura), NULL);
+                    SQLGetData(hStmt, 5, SQL_C_CHAR, tipoFactura, sizeof(tipoFactura), NULL);
+                    SQLGetData(hStmt, 6, SQL_C_CHAR, fecha, sizeof(fecha), NULL);
+                    SQLGetData(hStmt, 7, SQL_C_FLOAT, &total, 0, NULL);
 
                     cout << "\n--- FACTURA ENCONTRADA ---\n";
                     cout << "ID factura: " << idFactura << endl;
-                    cout << "ID venta: " << idVenta << endl;
+                    if (idVenta > 0) {
+                        cout << "Origen: Venta " << idVenta << endl;
+                    } else {
+                        cout << "Origen: Servicio " << idServicio << endl;
+                    }
                     cout << "Numero: " << numeroFactura << endl;
                     cout << "Tipo: " << tipoFactura << endl;
                     cout << "Fecha: " << fecha << endl;

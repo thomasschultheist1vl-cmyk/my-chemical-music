@@ -21,6 +21,7 @@ using namespace std;
 void menuFacturacion() {
     FacturaDAO facturaDAO;
     VentaDAO ventaDAO;
+    ServicioDAO servicioDAO;
 
     Factura factura;
     int opcion, id;
@@ -37,22 +38,46 @@ void menuFacturacion() {
 
         switch (opcion) {
             case 1: {
-                int idVenta;
+                int tipoOrigen, idVenta = 0, idServicio = 0;
                 string numeroFactura, tipoFactura, fecha;
                 float total;
 
-                cout << "\nVentas disponibles:\n";
-                ventaDAO.listar();
+                cout << "\nQue queres facturar?\n";
+                cout << "1. Venta\n";
+                cout << "2. Servicio\n";
+                cout << "Opcion: ";
+                cin >> tipoOrigen;
 
-                cout << "\nIngrese ID de la venta a facturar: ";
-                cin >> idVenta;
+                if (tipoOrigen == 1) {
+                    cout << "\nVentas disponibles:\n";
+                    ventaDAO.listar();
 
-                if (!ventaDAO.existe(idVenta)) {
-                    cout << "No existe una venta con ese ID." << endl;
+                    cout << "\nIngrese ID de la venta a facturar: ";
+                    cin >> idVenta;
+
+                    if (!ventaDAO.existe(idVenta)) {
+                        cout << "No existe una venta con ese ID." << endl;
+                        break;
+                    }
+
+                    total = ventaDAO.obtenerTotal(idVenta);
+                } else if (tipoOrigen == 2) {
+                    cout << "\nServicios disponibles:\n";
+                    servicioDAO.listar();
+
+                    cout << "\nIngrese ID del servicio a facturar: ";
+                    cin >> idServicio;
+
+                    if (!servicioDAO.existe(idServicio)) {
+                        cout << "No existe un servicio con ese ID." << endl;
+                        break;
+                    }
+
+                    total = servicioDAO.obtenerPrecio(idServicio);
+                } else {
+                    cout << "Opcion invalida." << endl;
                     break;
                 }
-
-                total = ventaDAO.obtenerTotal(idVenta);
 
                 cin.ignore();
 
@@ -66,6 +91,7 @@ void menuFacturacion() {
                 getline(cin, fecha);
 
                 factura.setIdVenta(idVenta);
+                factura.setIdServicio(idServicio);
                 factura.setNumeroFactura(numeroFactura);
                 factura.setTipoFactura(tipoFactura);
                 factura.setFecha(fecha);

@@ -21,6 +21,7 @@
 #include <QTabWidget>
 #include <QTableWidget>
 #include <QTableWidgetItem>
+#include <QVariant>
 #include <QVBoxLayout>
 
 MainWindow::MainWindow(QWidget *parent)
@@ -261,7 +262,7 @@ void MainWindow::buildInterface()
     pages->addWidget(createDataPage(&ventasTable, {"ID", "Cliente", "Fecha", "Total", "Medio de pago"}, "ventas"));
     pages->addWidget(createDataPage(&serviciosTable, {"ID", "Cliente", "Instrumento", "Descripcion", "Ingreso", "Entrega", "Precio", "Estado"}, "servicios"));
     pages->addWidget(createDataPage(&comprasTable, {"ID", "Proveedor", "Fecha", "Total"}, "compras"));
-    pages->addWidget(createDataPage(&facturasTable, {"ID", "Venta", "Numero", "Tipo", "Fecha", "Total"}, "facturas"));
+    pages->addWidget(createDataPage(&facturasTable, {"ID", "Origen", "Referencia", "Numero", "Tipo", "Fecha", "Total"}, "facturas"));
     pages->addWidget(createConfiguracionPage());
 
     contentLayout->addLayout(headerLayout);
@@ -767,8 +768,10 @@ void MainWindow::loadFacturas()
 {
     fillTable(
         facturasTable,
-        {"ID", "Venta", "Numero", "Tipo", "Fecha", "Total"},
-        "SELECT id_factura, id_venta, numero_factura, tipo_factura, fecha, total "
+        {"ID", "Origen", "Referencia", "Numero", "Tipo", "Fecha", "Total"},
+        "SELECT id_factura, "
+        "CASE WHEN id_venta IS NOT NULL THEN 'Venta' ELSE 'Servicio' END, "
+        "COALESCE(id_venta, id_servicio), numero_factura, tipo_factura, fecha, total "
         "FROM facturas "
         "ORDER BY id_factura DESC"
     );
@@ -1255,7 +1258,7 @@ bool MainWindow::showCompraDetalleDialog(int &idProducto, int &cantidad, double 
     return true;
 }
 
-bool MainWindow::showFacturaDialog(int &idVenta, QString &numeroFactura, QString &tipoFactura, QString &fecha, double &total)
+bool MainWindow::showFacturaDialog(int &idVenta, int &idServicio, QString &numeroFactura, QString &tipoFactura, QString &fecha, double &total)
 {
     QDialog dialog(this);
     dialog.setWindowTitle("Generar factura");
@@ -1264,32 +1267,75 @@ bool MainWindow::showFacturaDialog(int &idVenta, QString &numeroFactura, QString
     QVBoxLayout *layout = new QVBoxLayout(&dialog);
     QFormLayout *form = new QFormLayout;
 
-    QComboBox *ventaCombo = new QComboBox(&dialog);
+    QComboBox *origenCombo = new QComboBox(&dialog);
+    QComboBox *referenciaCombo = new QComboBox(&dialog);
     QLineEdit *numeroEdit = new QLineEdit(numeroFactura, &dialog);
-    QLineEdit *tipoEdit = new QLineEdit(tipoFactura, &dialog);
+    QComboBox *tipoCombo = new QComboBox(&dialog);
     QLineEdit *fechaEdit = new QLineEdit(fecha, &dialog);
     QLabel *totalLabel = new QLabel("$0", &dialog);
     fechaEdit->setPlaceholderText("YYYY-MM-DD");
 
-    if (!fillCombo(ventaCombo, "SELECT id_venta, CONCAT('Venta ', id_venta, ' - $', total) FROM ventas ORDER BY id_venta DESC")) {
-        return false;
+    origenCombo->addItem("Venta", "venta");
+    origenCombo->addItem("Servicio", "servicio");
+    tipoCombo->addItems({"A", "B", "C"});
+    const int tipoIndex = tipoCombo->findText(tipoFactura);
+    if (tipoIndex >= 0) {
+        tipoCombo->setCurrentIndex(tipoIndex);
     }
 
-    auto updateTotal = [&]() {
+    auto populateReferencias = [&]() {
+        referenciaCombo->clear();
         QSqlQuery query(db);
-        query.prepare("SELECT total FROM ventas WHERE id_venta = ?");
-        query.addBindValue(selectedComboId(ventaCombo));
+        const bool esVenta = origenCombo->currentData().toString() == "venta";
+        const QString sql = esVenta
+            ? "SELECT id_venta, CONCAT('Venta ', id_venta, ' - $', total) FROM ventas ORDER BY id_venta DESC"
+            : "SELECT s.id_servicio, CONCAT('Servicio ', s.id_servicio, ' - ', s.instrumento, ' - $', s.precio) "
+              "FROM servicios s ORDER BY s.id_servicio DESC";
+
+        if (!query.exec(sql)) {
+            QMessageBox::warning(&dialog, "Base de datos", "No se pudieron cargar las opciones:\n" + query.lastError().text());
+            return;
+        }
+
+        while (query.next()) {
+            referenciaCombo->addItem(query.value(1).toString(), query.value(0).toInt());
+        }
+    };
+
+    auto updateTotal = [&]() {
+        total = 0;
+        totalLabel->setText("$0.00");
+        if (referenciaCombo->count() == 0) {
+            return;
+        }
+
+        QSqlQuery query(db);
+        if (origenCombo->currentData().toString() == "venta") {
+            query.prepare("SELECT total FROM ventas WHERE id_venta = ?");
+        } else {
+            query.prepare("SELECT precio FROM servicios WHERE id_servicio = ?");
+        }
+        query.addBindValue(selectedComboId(referenciaCombo));
+
         if (query.exec() && query.next()) {
             total = query.value(0).toDouble();
             totalLabel->setText("$" + QString::number(total, 'f', 2));
         }
     };
-    connect(ventaCombo, &QComboBox::currentIndexChanged, &dialog, updateTotal);
-    updateTotal();
 
-    form->addRow("Venta:", ventaCombo);
+    auto refreshReferencias = [&]() {
+        populateReferencias();
+        updateTotal();
+    };
+
+    connect(origenCombo, &QComboBox::currentIndexChanged, &dialog, refreshReferencias);
+    connect(referenciaCombo, &QComboBox::currentIndexChanged, &dialog, updateTotal);
+    refreshReferencias();
+
+    form->addRow("Facturar:", origenCombo);
+    form->addRow("Referencia:", referenciaCombo);
     form->addRow("Numero factura:", numeroEdit);
-    form->addRow("Tipo factura:", tipoEdit);
+    form->addRow("Tipo factura:", tipoCombo);
     form->addRow("Fecha:", fechaEdit);
     form->addRow("Total:", totalLabel);
 
@@ -1301,7 +1347,11 @@ bool MainWindow::showFacturaDialog(int &idVenta, QString &numeroFactura, QString
     layout->addWidget(buttons);
 
     connect(buttons, &QDialogButtonBox::accepted, &dialog, [&]() {
-        if (numeroEdit->text().trimmed().isEmpty() || tipoEdit->text().trimmed().isEmpty() || fechaEdit->text().trimmed().isEmpty()) {
+        if (referenciaCombo->count() == 0) {
+            QMessageBox::warning(&dialog, "Datos incompletos", "No hay ventas o servicios disponibles para facturar.");
+            return;
+        }
+        if (numeroEdit->text().trimmed().isEmpty() || fechaEdit->text().trimmed().isEmpty()) {
             QMessageBox::warning(&dialog, "Datos incompletos", "Numero, tipo y fecha son obligatorios.");
             return;
         }
@@ -1313,9 +1363,15 @@ bool MainWindow::showFacturaDialog(int &idVenta, QString &numeroFactura, QString
         return false;
     }
 
-    idVenta = selectedComboId(ventaCombo);
+    if (origenCombo->currentData().toString() == "venta") {
+        idVenta = selectedComboId(referenciaCombo);
+        idServicio = -1;
+    } else {
+        idVenta = -1;
+        idServicio = selectedComboId(referenciaCombo);
+    }
     numeroFactura = numeroEdit->text().trimmed();
-    tipoFactura = tipoEdit->text().trimmed();
+    tipoFactura = tipoCombo->currentText();
     fecha = fechaEdit->text().trimmed();
     return true;
 }
@@ -2061,16 +2117,18 @@ void MainWindow::addFactura()
     }
 
     int idVenta = -1;
+    int idServicio = -1;
     QString numeroFactura, tipoFactura, fecha;
     double total = 0;
 
-    if (!showFacturaDialog(idVenta, numeroFactura, tipoFactura, fecha, total)) {
+    if (!showFacturaDialog(idVenta, idServicio, numeroFactura, tipoFactura, fecha, total)) {
         return;
     }
 
     QSqlQuery query(db);
-    query.prepare("INSERT INTO facturas (id_venta, numero_factura, tipo_factura, fecha, total) VALUES (?, ?, ?, ?, ?)");
-    query.addBindValue(idVenta);
+    query.prepare("INSERT INTO facturas (id_venta, id_servicio, numero_factura, tipo_factura, fecha, total) VALUES (?, ?, ?, ?, ?, ?)");
+    query.addBindValue(idVenta > 0 ? QVariant(idVenta) : QVariant());
+    query.addBindValue(idServicio > 0 ? QVariant(idServicio) : QVariant());
     query.addBindValue(numeroFactura);
     query.addBindValue(tipoFactura);
     query.addBindValue(fecha);

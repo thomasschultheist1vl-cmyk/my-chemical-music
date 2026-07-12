@@ -278,6 +278,32 @@ public:
             conexion.desconectar();
         }
     }
+
+    float obtenerPrecio(int idServicio) {
+        ConexionBD conexion;
+        float precio = 0;
+
+        if (conexion.conectar()) {
+            SQLHDBC hDbc = conexion.getConexion();
+            SQLHSTMT hStmt;
+
+            SQLAllocHandle(SQL_HANDLE_STMT, hDbc, &hStmt);
+
+            string consulta =
+                "SELECT precio FROM servicios WHERE id_servicio = " + to_string(idServicio);
+
+            SQLRETURN ret = SQLExecDirectA(hStmt, (SQLCHAR*)consulta.c_str(), SQL_NTS);
+
+            if (SQL_SUCCEEDED(ret) && SQLFetch(hStmt) == SQL_SUCCESS) {
+                SQLGetData(hStmt, 1, SQL_C_FLOAT, &precio, 0, NULL);
+            }
+
+            SQLFreeHandle(SQL_HANDLE_STMT, hStmt);
+            conexion.desconectar();
+        }
+
+        return precio;
+    }
 };
 
 #endif
