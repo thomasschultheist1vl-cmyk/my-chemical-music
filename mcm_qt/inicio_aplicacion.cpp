@@ -1,4 +1,4 @@
-#include "mainwindow.h"
+﻿#include "ventana_principal.h"
 
 #include <QApplication>
 
@@ -9,3 +9,4 @@ int main(int argc, char *argv[])
     w.show();
     return QApplication::exec();
 }
+

@@ -7,11 +7,24 @@
 #include <string>
 #include <sql.h>
 #include <sqlext.h>
+#ifdef MCM_QT_APP
+#include <QSqlDatabase>
+#include <QSqlQuery>
+#include <QVariant>
+#endif
 
 using namespace std;
 
 class CategoriaDAO {
 public:
+#ifdef MCM_QT_APP
+    explicit CategoriaDAO(const QSqlDatabase &db) : conexionQt(db) {}
+    QSqlQuery listarQt() const { QSqlQuery q(conexionQt); q.exec("SELECT id_categoria, nombre, descripcion FROM categorias ORDER BY id_categoria"); return q; }
+    QSqlQuery paraComboQt() const { QSqlQuery q(conexionQt); q.exec("SELECT id_categoria, nombre FROM categorias ORDER BY nombre"); return q; }
+    bool agregarQt(Categoria &c) const { QSqlQuery q(conexionQt); q.prepare("INSERT INTO categorias (nombre, descripcion) VALUES (?, ?)"); q.addBindValue(QString::fromStdString(c.getNombre())); q.addBindValue(QString::fromStdString(c.getDescripcion())); return q.exec(); }
+    bool modificarQt(Categoria &c) const { QSqlQuery q(conexionQt); q.prepare("UPDATE categorias SET nombre=?, descripcion=? WHERE id_categoria=?"); q.addBindValue(QString::fromStdString(c.getNombre())); q.addBindValue(QString::fromStdString(c.getDescripcion())); q.addBindValue(c.getIdCategoria()); return q.exec(); }
+    bool eliminarQt(int id) const { QSqlQuery q(conexionQt); q.prepare("DELETE FROM categorias WHERE id_categoria=?"); q.addBindValue(id); return q.exec(); }
+#endif
     bool existe(int id) {
         ConexionBD conexion;
 
@@ -215,6 +228,9 @@ public:
             conexion.desconectar();
         }
     }
+#ifdef MCM_QT_APP
+private: QSqlDatabase conexionQt;
+#endif
 };
 
 #endif

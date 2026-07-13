@@ -7,11 +7,24 @@
 #include <string>
 #include <sql.h>
 #include <sqlext.h>
+#ifdef MCM_QT_APP
+#include <QSqlDatabase>
+#include <QSqlQuery>
+#include <QVariant>
+#endif
 
 using namespace std;
 
 class MedioPagoDAO {
 public:
+#ifdef MCM_QT_APP
+    explicit MedioPagoDAO(const QSqlDatabase &db) : conexionQt(db) {}
+    QSqlQuery listarQt() const { QSqlQuery q(conexionQt); q.exec("SELECT id_medio_pago, nombre FROM medios_pago ORDER BY id_medio_pago"); return q; }
+    QSqlQuery paraComboQt() const { QSqlQuery q(conexionQt); q.exec("SELECT id_medio_pago, nombre FROM medios_pago ORDER BY id_medio_pago"); return q; }
+    bool agregarQt(MedioPago &m) const { QSqlQuery q(conexionQt); q.prepare("INSERT INTO medios_pago (nombre) VALUES (?)"); q.addBindValue(QString::fromStdString(m.getNombre())); return q.exec(); }
+    bool modificarQt(MedioPago &m) const { QSqlQuery q(conexionQt); q.prepare("UPDATE medios_pago SET nombre=? WHERE id_medio_pago=?"); q.addBindValue(QString::fromStdString(m.getNombre())); q.addBindValue(m.getIdMedioPago()); return q.exec(); }
+    bool eliminarQt(int id) const { QSqlQuery q(conexionQt); q.prepare("DELETE FROM medios_pago WHERE id_medio_pago=?"); q.addBindValue(id); return q.exec(); }
+#endif
     bool existe(int id) {
         ConexionBD conexion;
 
@@ -195,6 +208,9 @@ public:
             conexion.desconectar();
         }
     }
+#ifdef MCM_QT_APP
+private: QSqlDatabase conexionQt;
+#endif
 };
 
 #endif

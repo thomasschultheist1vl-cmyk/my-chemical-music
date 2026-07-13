@@ -4,11 +4,19 @@
 #include <windows.h>
 #include <sql.h>
 #include <sqlext.h>
+#ifdef MCM_QT_APP
+#include <QSqlDatabase>
+#include <QSqlError>
+#include <QString>
+#endif
 
 class ConexionBD {
 private:
     SQLHENV hEnv;
     SQLHDBC hDbc;
+#ifdef MCM_QT_APP
+    QSqlDatabase conexionQt;
+#endif
 
 public:
     ConexionBD() {
@@ -45,7 +53,33 @@ public:
         return hDbc;
     }
 
+#ifdef MCM_QT_APP
+    bool conectarQt(QString *error = nullptr) {
+        const QString nombre = "mcm_connection";
+        if (QSqlDatabase::contains(nombre)) {
+            conexionQt = QSqlDatabase::database(nombre);
+        } else {
+            conexionQt = QSqlDatabase::addDatabase("QODBC", nombre);
+            conexionQt.setDatabaseName("my_chemical_music64");
+            conexionQt.setUserName("root");
+            conexionQt.setPassword("");
+        }
+        if (conexionQt.isOpen() || conexionQt.open()) return true;
+        if (error) *error = conexionQt.lastError().text();
+        return false;
+    }
+
+    QSqlDatabase getConexionQt() const { return conexionQt; }
+    bool estaConectadoQt() const { return conexionQt.isValid() && conexionQt.isOpen(); }
+    bool iniciarTransaccionQt() { return conexionQt.transaction(); }
+    bool confirmarTransaccionQt() { return conexionQt.commit(); }
+    void cancelarTransaccionQt() { conexionQt.rollback(); }
+#endif
+
     void desconectar() {
+#ifdef MCM_QT_APP
+        if (conexionQt.isOpen()) conexionQt.close();
+#endif
         if (hDbc != NULL) {
             SQLDisconnect(hDbc);
             SQLFreeHandle(SQL_HANDLE_DBC, hDbc);

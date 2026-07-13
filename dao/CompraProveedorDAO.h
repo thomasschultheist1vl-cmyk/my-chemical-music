@@ -7,11 +7,25 @@
 #include <string>
 #include <sql.h>
 #include <sqlext.h>
+#ifdef MCM_QT_APP
+#include <QSqlDatabase>
+#include <QSqlQuery>
+#include <QVariant>
+#endif
 
 using namespace std;
 
 class CompraProveedorDAO {
 public:
+#ifdef MCM_QT_APP
+    explicit CompraProveedorDAO(const QSqlDatabase &conexion) : conexionQt(conexion) {}
+    QSqlQuery listarQt() const { QSqlQuery q(conexionQt); q.exec("SELECT cp.id_compra, p.nombre, DATE_FORMAT(cp.fecha, '%d/%m/%Y'), cp.total FROM compras_proveedores cp LEFT JOIN proveedores p ON cp.id_proveedor=p.id_proveedor ORDER BY cp.id_compra DESC"); return q; }
+    bool agregarQt(CompraProveedor &c) const { QSqlQuery q(conexionQt); q.prepare("INSERT INTO compras_proveedores (id_proveedor, fecha, total) VALUES (?, ?, ?)"); q.addBindValue(c.getIdProveedor()); q.addBindValue(QString::fromStdString(c.getFecha())); q.addBindValue(c.getTotal()); return q.exec(); }
+    int obtenerUltimoIdQt() const { QSqlQuery q(conexionQt); return q.exec("SELECT LAST_INSERT_ID()") && q.next() ? q.value(0).toInt() : 0; }
+    bool actualizarTotalQt(int id, double total) const { QSqlQuery q(conexionQt); q.prepare("UPDATE compras_proveedores SET total=? WHERE id_compra=?"); q.addBindValue(total); q.addBindValue(id); return q.exec(); }
+    bool eliminarQt(int id) const { QSqlQuery q(conexionQt); q.prepare("DELETE FROM compras_proveedores WHERE id_compra=?"); q.addBindValue(id); return q.exec(); }
+    QSqlQuery ultimosQt(int limite=7) const { QSqlQuery q(conexionQt); q.prepare("SELECT id_compra, id_compra, fecha FROM compras_proveedores ORDER BY fecha DESC, id_compra DESC LIMIT ?"); q.addBindValue(limite); q.exec(); return q; }
+#endif
     bool existe(int id) {
         ConexionBD conexion;
 
@@ -235,6 +249,9 @@ public:
             conexion.desconectar();
         }
     }
+#ifdef MCM_QT_APP
+private: QSqlDatabase conexionQt;
+#endif
 };
 
 #endif

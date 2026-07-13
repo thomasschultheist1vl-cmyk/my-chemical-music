@@ -7,11 +7,29 @@
 #include <string>
 #include <sql.h>
 #include <sqlext.h>
+#ifdef MCM_QT_APP
+#include <QSqlDatabase>
+#include <QSqlQuery>
+#include <QVariant>
+#endif
 
 using namespace std;
 
 class ServicioDAO {
 public:
+#ifdef MCM_QT_APP
+    explicit ServicioDAO(const QSqlDatabase &conexion) : conexionQt(conexion) {}
+    QSqlQuery listarQt() const { QSqlQuery q(conexionQt); q.exec("SELECT s.id_servicio, CONCAT(c.nombre, ' ', c.apellido), s.instrumento, s.descripcion, DATE_FORMAT(s.fecha_ingreso, '%d/%m/%Y'), DATE_FORMAT(s.fecha_entrega, '%d/%m/%Y'), s.precio, es.nombre FROM servicios s LEFT JOIN clientes c ON s.id_cliente=c.id_cliente LEFT JOIN estados_servicio es ON s.id_estado_servicio=es.id_estado_servicio ORDER BY s.id_servicio DESC"); return q; }
+    QSqlQuery buscarQt(int id) const { QSqlQuery q(conexionQt); q.prepare("SELECT id_cliente, instrumento, descripcion, fecha_ingreso, fecha_entrega, precio, id_estado_servicio FROM servicios WHERE id_servicio=?"); q.addBindValue(id); q.exec(); return q; }
+    bool agregarQt(Servicio &s) const { QSqlQuery q(conexionQt); q.prepare("INSERT INTO servicios (id_cliente, instrumento, descripcion, fecha_ingreso, fecha_entrega, precio, id_estado_servicio) VALUES (?, ?, ?, ?, ?, ?, ?)"); q.addBindValue(s.getIdCliente()); q.addBindValue(QString::fromStdString(s.getInstrumento())); q.addBindValue(QString::fromStdString(s.getDescripcion())); q.addBindValue(QString::fromStdString(s.getFechaIngreso())); q.addBindValue(QString::fromStdString(s.getFechaEntrega())); q.addBindValue(s.getPrecio()); q.addBindValue(s.getIdEstadoServicio()); return q.exec(); }
+    bool modificarQt(Servicio &s) const { QSqlQuery q(conexionQt); q.prepare("UPDATE servicios SET id_cliente=?, instrumento=?, descripcion=?, fecha_ingreso=?, fecha_entrega=?, precio=?, id_estado_servicio=? WHERE id_servicio=?"); q.addBindValue(s.getIdCliente()); q.addBindValue(QString::fromStdString(s.getInstrumento())); q.addBindValue(QString::fromStdString(s.getDescripcion())); q.addBindValue(QString::fromStdString(s.getFechaIngreso())); q.addBindValue(QString::fromStdString(s.getFechaEntrega())); q.addBindValue(s.getPrecio()); q.addBindValue(s.getIdEstadoServicio()); q.addBindValue(s.getIdServicio()); return q.exec(); }
+    bool eliminarQt(int id) const { QSqlQuery q(conexionQt); q.prepare("DELETE FROM servicios WHERE id_servicio=?"); q.addBindValue(id); return q.exec(); }
+    bool cambiarEstadoQt(int id, int estado) const { QSqlQuery q(conexionQt); q.prepare("UPDATE servicios SET id_estado_servicio=? WHERE id_servicio=?"); q.addBindValue(estado); q.addBindValue(id); return q.exec(); }
+    QSqlQuery paraComboQt() const { QSqlQuery q(conexionQt); q.exec("SELECT id_servicio, CONCAT('Servicio ', id_servicio, ' - ', instrumento, ' - $', precio) FROM servicios ORDER BY id_servicio DESC"); return q; }
+    QSqlQuery precioQt(int id) const { QSqlQuery q(conexionQt); q.prepare("SELECT precio FROM servicios WHERE id_servicio=?"); q.addBindValue(id); q.exec(); return q; }
+    QSqlQuery contarQt() const { QSqlQuery q(conexionQt); q.exec("SELECT COUNT(*) FROM servicios"); return q; }
+    QSqlQuery ultimosQt(int limite=7) const { QSqlQuery q(conexionQt); q.prepare("SELECT id_servicio, id_servicio, fecha_ingreso FROM servicios ORDER BY fecha_ingreso DESC, id_servicio DESC LIMIT ?"); q.addBindValue(limite); q.exec(); return q; }
+#endif
     bool existe(int id) {
         ConexionBD conexion;
 
@@ -304,6 +322,9 @@ public:
 
         return precio;
     }
+#ifdef MCM_QT_APP
+private: QSqlDatabase conexionQt;
+#endif
 };
 
 #endif

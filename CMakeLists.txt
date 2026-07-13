@@ -28,10 +28,27 @@ set_source_files_properties(
 )
 
 set(PROJECT_SOURCES
-    mcm_qt/main_qt.cpp
-    mcm_qt/mainwindow.cpp
-    mcm_qt/mainwindow.h
-    mcm_qt/mainwindow.ui
+    mcm_qt/inicio_aplicacion.cpp
+    mcm_qt/ventana_principal_interfaz.cpp
+    mcm_qt/ventana_principal_datos.cpp
+    mcm_qt/acciones/acciones_clientes.cpp
+    mcm_qt/acciones/acciones_productos.cpp
+    mcm_qt/acciones/acciones_ventas.cpp
+    mcm_qt/acciones/acciones_servicios.cpp
+    mcm_qt/acciones/acciones_compras.cpp
+    mcm_qt/acciones/acciones_facturacion.cpp
+    mcm_qt/acciones/acciones_datos_generales.cpp
+    mcm_qt/formularios/formularios_clientes.cpp
+    mcm_qt/formularios/formularios_productos.cpp
+    mcm_qt/formularios/formularios_ventas.cpp
+    mcm_qt/formularios/formularios_servicios.cpp
+    mcm_qt/formularios/formularios_compras.cpp
+    mcm_qt/formularios/formularios_facturacion.cpp
+    mcm_qt/formularios/formularios_datos_generales.cpp
+    mcm_qt/utilidades/utilidades_seleccion.cpp
+    mcm_qt/utilidades/utilidades_fecha.h
+    mcm_qt/ventana_principal.h
+    mcm_qt/ventana_principal.ui
 
     main.cpp
 
@@ -97,6 +114,10 @@ else()
 endif()
 
 target_link_libraries(mcm_qt PRIVATE Qt${QT_VERSION_MAJOR}::Widgets Qt${QT_VERSION_MAJOR}::Sql)
+target_compile_definitions(mcm_qt PRIVATE MCM_QT_APP)
+set_target_properties(mcm_qt PROPERTIES
+    AUTOUIC_SEARCH_PATHS "${CMAKE_CURRENT_SOURCE_DIR}/mcm_qt"
+)
 
 set_target_properties(mcm_qt PROPERTIES
     WIN32_EXECUTABLE TRUE

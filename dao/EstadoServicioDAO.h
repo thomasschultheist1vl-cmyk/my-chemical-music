@@ -7,11 +7,24 @@
 #include <string>
 #include <sql.h>
 #include <sqlext.h>
+#ifdef MCM_QT_APP
+#include <QSqlDatabase>
+#include <QSqlQuery>
+#include <QVariant>
+#endif
 
 using namespace std;
 
 class EstadoServicioDAO {
 public:
+#ifdef MCM_QT_APP
+    explicit EstadoServicioDAO(const QSqlDatabase &db) : conexionQt(db) {}
+    QSqlQuery listarQt() const { QSqlQuery q(conexionQt); q.exec("SELECT id_estado_servicio, nombre FROM estados_servicio ORDER BY id_estado_servicio"); return q; }
+    QSqlQuery paraComboQt() const { return listarQt(); }
+    bool agregarQt(EstadoServicio &e) const { QSqlQuery q(conexionQt); q.prepare("INSERT INTO estados_servicio (nombre) VALUES (?)"); q.addBindValue(QString::fromStdString(e.getNombre())); return q.exec(); }
+    bool modificarQt(EstadoServicio &e) const { QSqlQuery q(conexionQt); q.prepare("UPDATE estados_servicio SET nombre=? WHERE id_estado_servicio=?"); q.addBindValue(QString::fromStdString(e.getNombre())); q.addBindValue(e.getIdEstadoServicio()); return q.exec(); }
+    bool eliminarQt(int id) const { QSqlQuery q(conexionQt); q.prepare("DELETE FROM estados_servicio WHERE id_estado_servicio=?"); q.addBindValue(id); return q.exec(); }
+#endif
     bool existe(int id) {
         ConexionBD conexion;
 
@@ -199,6 +212,9 @@ public:
             conexion.desconectar();
         }
     }
+#ifdef MCM_QT_APP
+private: QSqlDatabase conexionQt;
+#endif
 };
 
 #endif

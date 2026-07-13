@@ -7,11 +7,27 @@
 #include <string>
 #include <sql.h>
 #include <sqlext.h>
+#ifdef MCM_QT_APP
+#include <QSqlDatabase>
+#include <QSqlQuery>
+#include <QVariant>
+#endif
 
 using namespace std;
 
 class VentaDAO {
 public:
+#ifdef MCM_QT_APP
+    explicit VentaDAO(const QSqlDatabase &conexion) : conexionQt(conexion) {}
+    QSqlQuery listarQt() const { QSqlQuery q(conexionQt); q.exec("SELECT v.id_venta, CONCAT(c.nombre, ' ', c.apellido), DATE_FORMAT(v.fecha, '%d/%m/%Y'), v.total, mp.nombre FROM ventas v LEFT JOIN clientes c ON v.id_cliente=c.id_cliente LEFT JOIN medios_pago mp ON v.id_medio_pago=mp.id_medio_pago ORDER BY v.id_venta DESC"); return q; }
+    bool agregarQt(Venta &v) const { QSqlQuery q(conexionQt); q.prepare("INSERT INTO ventas (id_cliente, fecha, total, id_medio_pago) VALUES (?, ?, ?, ?)"); q.addBindValue(v.getIdCliente()); q.addBindValue(QString::fromStdString(v.getFecha())); q.addBindValue(v.getTotal()); q.addBindValue(v.getIdMedioPago()); return q.exec(); }
+    int obtenerUltimoIdQt() const { QSqlQuery q(conexionQt); return q.exec("SELECT LAST_INSERT_ID()") && q.next() ? q.value(0).toInt() : 0; }
+    bool actualizarTotalQt(int id, double total) const { QSqlQuery q(conexionQt); q.prepare("UPDATE ventas SET total=? WHERE id_venta=?"); q.addBindValue(total); q.addBindValue(id); return q.exec(); }
+    QSqlQuery paraComboQt() const { QSqlQuery q(conexionQt); q.exec("SELECT id_venta, CONCAT('Venta ', id_venta, ' - $', total) FROM ventas ORDER BY id_venta DESC"); return q; }
+    QSqlQuery totalQt(int id) const { QSqlQuery q(conexionQt); q.prepare("SELECT total FROM ventas WHERE id_venta=?"); q.addBindValue(id); q.exec(); return q; }
+    QSqlQuery contarQt() const { QSqlQuery q(conexionQt); q.exec("SELECT COUNT(*) FROM ventas"); return q; }
+    QSqlQuery ultimosQt(int limite=7) const { QSqlQuery q(conexionQt); q.prepare("SELECT id_venta, id_venta, fecha FROM ventas ORDER BY fecha DESC, id_venta DESC LIMIT ?"); q.addBindValue(limite); q.exec(); return q; }
+#endif
     bool existe(int id) {
         ConexionBD conexion;
 
@@ -303,6 +319,9 @@ float obtenerTotal(int idVenta) {
             conexion.desconectar();
         }
     }
+#ifdef MCM_QT_APP
+private: QSqlDatabase conexionQt;
+#endif
 };
 
 #endif

@@ -7,11 +7,24 @@
 #include <string>
 #include <sql.h>
 #include <sqlext.h>
+#ifdef MCM_QT_APP
+#include <QSqlDatabase>
+#include <QSqlQuery>
+#include <QVariant>
+#endif
 
 using namespace std;
 
 class ProveedorDAO {
 public:
+#ifdef MCM_QT_APP
+    explicit ProveedorDAO(const QSqlDatabase &db) : conexionQt(db) {}
+    QSqlQuery listarQt() const { QSqlQuery q(conexionQt); q.exec("SELECT id_proveedor, nombre, telefono, email, direccion, cuit FROM proveedores ORDER BY id_proveedor"); return q; }
+    QSqlQuery paraComboQt() const { QSqlQuery q(conexionQt); q.exec("SELECT id_proveedor, nombre FROM proveedores ORDER BY nombre"); return q; }
+    bool agregarQt(Proveedor &p) const { QSqlQuery q(conexionQt); q.prepare("INSERT INTO proveedores (nombre, telefono, email, direccion, cuit) VALUES (?, ?, ?, ?, ?)"); q.addBindValue(QString::fromStdString(p.getNombre())); q.addBindValue(QString::fromStdString(p.getTelefono())); q.addBindValue(QString::fromStdString(p.getEmail())); q.addBindValue(QString::fromStdString(p.getDireccion())); q.addBindValue(QString::fromStdString(p.getCuit())); return q.exec(); }
+    bool modificarQt(Proveedor &p) const { QSqlQuery q(conexionQt); q.prepare("UPDATE proveedores SET nombre=?, telefono=?, email=?, direccion=?, cuit=? WHERE id_proveedor=?"); q.addBindValue(QString::fromStdString(p.getNombre())); q.addBindValue(QString::fromStdString(p.getTelefono())); q.addBindValue(QString::fromStdString(p.getEmail())); q.addBindValue(QString::fromStdString(p.getDireccion())); q.addBindValue(QString::fromStdString(p.getCuit())); q.addBindValue(p.getIdProveedor()); return q.exec(); }
+    bool eliminarQt(int id) const { QSqlQuery q(conexionQt); q.prepare("DELETE FROM proveedores WHERE id_proveedor=?"); q.addBindValue(id); return q.exec(); }
+#endif
     bool existe(int id) {
         ConexionBD conexion;
 
@@ -231,6 +244,9 @@ public:
             conexion.desconectar();
         }
     }
+#ifdef MCM_QT_APP
+private: QSqlDatabase conexionQt;
+#endif
 };
 
 #endif

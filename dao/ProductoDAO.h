@@ -7,11 +7,30 @@
 #include <string>
 #include <sql.h>
 #include <sqlext.h>
+#ifdef MCM_QT_APP
+#include <QSqlDatabase>
+#include <QSqlQuery>
+#include <QVariant>
+#endif
 
 using namespace std;
 
 class ProductoDAO {
 public:
+#ifdef MCM_QT_APP
+    explicit ProductoDAO(const QSqlDatabase &conexion) : conexionQt(conexion) {}
+    QSqlQuery listarQt() const { QSqlQuery q(conexionQt); q.exec("SELECT p.id_producto, p.nombre, p.descripcion, p.precio_venta, p.stock, p.stock_minimo, c.nombre, m.nombre, pr.nombre FROM productos p LEFT JOIN categorias c ON p.id_categoria=c.id_categoria LEFT JOIN marcas m ON p.id_marca=m.id_marca LEFT JOIN proveedores pr ON p.id_proveedor=pr.id_proveedor ORDER BY p.id_producto"); return q; }
+    QSqlQuery buscarQt(int id) const { QSqlQuery q(conexionQt); q.prepare("SELECT nombre, descripcion, precio_venta, stock, stock_minimo, id_categoria, id_marca, id_proveedor FROM productos WHERE id_producto = ?"); q.addBindValue(id); q.exec(); return q; }
+    bool agregarQt(Producto &p) const { QSqlQuery q(conexionQt); q.prepare("INSERT INTO productos (nombre, descripcion, precio_venta, stock, stock_minimo, id_categoria, id_marca, id_proveedor) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"); q.addBindValue(QString::fromStdString(p.getNombre())); q.addBindValue(QString::fromStdString(p.getDescripcion())); q.addBindValue(p.getPrecioVenta()); q.addBindValue(p.getStock()); q.addBindValue(p.getStockMinimo()); q.addBindValue(p.getIdCategoria()); q.addBindValue(p.getIdMarca()); q.addBindValue(p.getIdProveedor()); return q.exec(); }
+    bool modificarQt(Producto &p) const { QSqlQuery q(conexionQt); q.prepare("UPDATE productos SET nombre=?, descripcion=?, precio_venta=?, stock=?, stock_minimo=?, id_categoria=?, id_marca=?, id_proveedor=? WHERE id_producto=?"); q.addBindValue(QString::fromStdString(p.getNombre())); q.addBindValue(QString::fromStdString(p.getDescripcion())); q.addBindValue(p.getPrecioVenta()); q.addBindValue(p.getStock()); q.addBindValue(p.getStockMinimo()); q.addBindValue(p.getIdCategoria()); q.addBindValue(p.getIdMarca()); q.addBindValue(p.getIdProveedor()); q.addBindValue(p.getIdProducto()); return q.exec(); }
+    bool eliminarQt(int id) const { QSqlQuery q(conexionQt); q.prepare("DELETE FROM productos WHERE id_producto=?"); q.addBindValue(id); return q.exec(); }
+    QSqlQuery contarQt() const { QSqlQuery q(conexionQt); q.exec("SELECT COUNT(*) FROM productos"); return q; }
+    QSqlQuery stockBajoQt(int maximo=3) const { QSqlQuery q(conexionQt); q.prepare("SELECT nombre, stock FROM productos WHERE stock <= ? ORDER BY stock ASC, nombre ASC"); q.addBindValue(maximo); q.exec(); return q; }
+    QSqlQuery paraComboQt(bool conStockPrecio=false) const { QSqlQuery q(conexionQt); q.exec(conStockPrecio ? "SELECT id_producto, CONCAT(nombre, ' - Stock: ', stock, ' - $', precio_venta) FROM productos ORDER BY nombre" : "SELECT id_producto, nombre FROM productos ORDER BY nombre"); return q; }
+    QSqlQuery precioStockQt(int id) const { QSqlQuery q(conexionQt); q.prepare("SELECT precio_venta, stock FROM productos WHERE id_producto=?"); q.addBindValue(id); q.exec(); return q; }
+    bool ajustarStockQt(int id, int cantidad) const { QSqlQuery q(conexionQt); q.prepare("UPDATE productos SET stock=stock+? WHERE id_producto=?"); q.addBindValue(cantidad); q.addBindValue(id); return q.exec(); }
+    QSqlQuery ultimosQt(int limite=7) const { QSqlQuery q(conexionQt); q.prepare("SELECT id_producto, nombre FROM productos ORDER BY id_producto DESC LIMIT ?"); q.addBindValue(limite); q.exec(); return q; }
+#endif
     bool existe(int id) {
         ConexionBD conexion;
 
@@ -272,6 +291,10 @@ public:
             conexion.desconectar();
         }
     }
+#ifdef MCM_QT_APP
+private:
+    QSqlDatabase conexionQt;
+#endif
 };
 
 #endif

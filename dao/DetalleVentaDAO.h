@@ -7,11 +7,21 @@
 #include <string>
 #include <sql.h>
 #include <sqlext.h>
+#ifdef MCM_QT_APP
+#include <QSqlDatabase>
+#include <QSqlQuery>
+#include <QVariant>
+#endif
 
 using namespace std;
 
 class DetalleVentaDAO {
 public:
+#ifdef MCM_QT_APP
+    explicit DetalleVentaDAO(const QSqlDatabase &conexion) : conexionQt(conexion) {}
+    bool agregarQt(DetalleVenta &d) const { QSqlQuery q(conexionQt); q.prepare("INSERT INTO detalle_ventas (id_venta, id_producto, cantidad, precio_unitario, subtotal) VALUES (?, ?, ?, ?, ?)"); q.addBindValue(d.getIdVenta()); q.addBindValue(d.getIdProducto()); q.addBindValue(d.getCantidad()); q.addBindValue(d.getPrecioUnitario()); q.addBindValue(d.getSubtotal()); return q.exec(); }
+    QSqlQuery listarPorVentaQt(int id) const { QSqlQuery q(conexionQt); q.prepare("SELECT p.nombre, dv.cantidad, dv.precio_unitario, dv.subtotal FROM detalle_ventas dv INNER JOIN productos p ON dv.id_producto=p.id_producto WHERE dv.id_venta=? ORDER BY dv.id_detalle_venta"); q.addBindValue(id); q.exec(); return q; }
+#endif
     bool existe(int id) {
         ConexionBD conexion;
 
@@ -251,6 +261,9 @@ public:
             conexion.desconectar();
         }
     }
+#ifdef MCM_QT_APP
+private: QSqlDatabase conexionQt;
+#endif
 };
 
 #endif

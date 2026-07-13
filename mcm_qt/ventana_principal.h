@@ -4,14 +4,15 @@
 #include <QMainWindow>
 #include <QHash>
 #include <QList>
-#include <QSqlDatabase>
 #include <QStringList>
+#include "../database/ConexionBD.h"
 
 class QComboBox;
 class QLabel;
 class QLineEdit;
 class QListWidget;
 class QPushButton;
+class QSqlQuery;
 class QStackedWidget;
 class QTabWidget;
 class QTableWidget;
@@ -58,7 +59,7 @@ private:
     QHash<QString, int> dashboardMaxId;
     QHash<QString, quint64> dashboardDetectedOrder;
     quint64 dashboardSequence;
-    QSqlDatabase db;
+    ConexionBD conexionBD;
 
     void buildInterface();
     QWidget *createDashboardPage();
@@ -70,8 +71,8 @@ private:
     void marcarSeccionActiva(QPushButton *activeButton);
     void connectDatabase();
     void actualizarDashboard();
-    void fillTable(QTableWidget *table, const QStringList &headers, const QString &sql);
-    bool fillCombo(QComboBox *combo, const QString &sql);
+    void fillTable(QTableWidget *table, const QStringList &headers, QSqlQuery query);
+    bool fillCombo(QComboBox *combo, QSqlQuery query);
     int selectedComboId(QComboBox *combo) const;
     int selectedId(QTableWidget *table) const;
     void loadClientes();

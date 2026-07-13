@@ -7,11 +7,23 @@
 #include <string>
 #include <sql.h>
 #include <sqlext.h>
+#ifdef MCM_QT_APP
+#include <QSqlDatabase>
+#include <QSqlQuery>
+#include <QVariant>
+#endif
 
 using namespace std;
 
 class FacturaDAO {
 public:
+#ifdef MCM_QT_APP
+    explicit FacturaDAO(const QSqlDatabase &conexion) : conexionQt(conexion) {}
+    QSqlQuery listarQt() const { QSqlQuery q(conexionQt); q.exec("SELECT id_factura, CASE WHEN id_venta IS NOT NULL THEN 'Venta' ELSE 'Servicio' END, COALESCE(id_venta,id_servicio), numero_factura, tipo_factura, DATE_FORMAT(fecha, '%d/%m/%Y'), total FROM facturas ORDER BY id_factura DESC"); return q; }
+    bool agregarQt(Factura &f) const { QSqlQuery q(conexionQt); q.prepare("INSERT INTO facturas (id_venta, id_servicio, numero_factura, tipo_factura, fecha, total) VALUES (?, ?, ?, ?, ?, ?)"); q.addBindValue(f.getIdVenta() > 0 ? QVariant(f.getIdVenta()) : QVariant()); q.addBindValue(f.getIdServicio() > 0 ? QVariant(f.getIdServicio()) : QVariant()); q.addBindValue(QString::fromStdString(f.getNumeroFactura())); q.addBindValue(QString::fromStdString(f.getTipoFactura())); q.addBindValue(QString::fromStdString(f.getFecha())); q.addBindValue(f.getTotal()); return q.exec(); }
+    bool eliminarQt(int id) const { QSqlQuery q(conexionQt); q.prepare("DELETE FROM facturas WHERE id_factura=?"); q.addBindValue(id); return q.exec(); }
+    QSqlQuery ultimosQt(int limite=7) const { QSqlQuery q(conexionQt); q.prepare("SELECT id_factura, id_factura, fecha FROM facturas ORDER BY fecha DESC, id_factura DESC LIMIT ?"); q.addBindValue(limite); q.exec(); return q; }
+#endif
     bool existe(int id) {
         ConexionBD conexion;
 
@@ -213,6 +225,9 @@ public:
             conexion.desconectar();
         }
     }
+#ifdef MCM_QT_APP
+private: QSqlDatabase conexionQt;
+#endif
 };
 
 #endif

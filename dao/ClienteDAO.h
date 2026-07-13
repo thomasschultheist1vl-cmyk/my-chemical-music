@@ -7,11 +7,37 @@
 #include <string>
 #include <sql.h>
 #include <sqlext.h>
+#ifdef MCM_QT_APP
+#include <QSqlDatabase>
+#include <QSqlQuery>
+#include <QVariant>
+#endif
 
 using namespace std;
 
 class ClienteDAO {
 public:
+#ifdef MCM_QT_APP
+    explicit ClienteDAO(const QSqlDatabase &conexion) : conexionQt(conexion) {}
+    QSqlQuery listarQt() const {
+        QSqlQuery q(conexionQt); q.exec("SELECT id_cliente, nombre, apellido, telefono, email, direccion, dni FROM clientes ORDER BY id_cliente"); return q;
+    }
+    QSqlQuery paraComboQt() const { QSqlQuery q(conexionQt); q.exec("SELECT id_cliente, CONCAT(nombre, ' ', apellido) FROM clientes ORDER BY apellido, nombre"); return q; }
+    QSqlQuery buscarQt(int id) const {
+        QSqlQuery q(conexionQt); q.prepare("SELECT nombre, apellido, telefono, email, direccion, dni FROM clientes WHERE id_cliente = ?"); q.addBindValue(id); q.exec(); return q;
+    }
+    bool agregarQt(Cliente &c) const {
+        QSqlQuery q(conexionQt); q.prepare("INSERT INTO clientes (nombre, apellido, telefono, email, direccion, dni) VALUES (?, ?, ?, ?, ?, ?)");
+        q.addBindValue(QString::fromStdString(c.getNombre())); q.addBindValue(QString::fromStdString(c.getApellido())); q.addBindValue(QString::fromStdString(c.getTelefono())); q.addBindValue(QString::fromStdString(c.getEmail())); q.addBindValue(QString::fromStdString(c.getDireccion())); q.addBindValue(QString::fromStdString(c.getDni())); return q.exec();
+    }
+    bool modificarQt(Cliente &c) const {
+        QSqlQuery q(conexionQt); q.prepare("UPDATE clientes SET nombre = ?, apellido = ?, telefono = ?, email = ?, direccion = ?, dni = ? WHERE id_cliente = ?");
+        q.addBindValue(QString::fromStdString(c.getNombre())); q.addBindValue(QString::fromStdString(c.getApellido())); q.addBindValue(QString::fromStdString(c.getTelefono())); q.addBindValue(QString::fromStdString(c.getEmail())); q.addBindValue(QString::fromStdString(c.getDireccion())); q.addBindValue(QString::fromStdString(c.getDni())); q.addBindValue(c.getIdCliente()); return q.exec();
+    }
+    bool eliminarQt(int id) const { QSqlQuery q(conexionQt); q.prepare("DELETE FROM clientes WHERE id_cliente = ?"); q.addBindValue(id); return q.exec(); }
+    QSqlQuery contarQt() const { QSqlQuery q(conexionQt); q.exec("SELECT COUNT(*) FROM clientes"); return q; }
+    QSqlQuery ultimosQt(int limite = 7) const { QSqlQuery q(conexionQt); q.prepare("SELECT id_cliente, CONCAT(nombre, ' ', apellido) FROM clientes ORDER BY id_cliente DESC LIMIT ?"); q.addBindValue(limite); q.exec(); return q; }
+#endif
     bool existe(int id) {
         ConexionBD conexion;
 
@@ -245,6 +271,10 @@ public:
         conexion.desconectar();
     }
 }
+#ifdef MCM_QT_APP
+private:
+    QSqlDatabase conexionQt;
+#endif
 };
 
 #endif
