@@ -1,7 +1,9 @@
 #include "mainwindow.h"
 #include "./ui_mainwindow.h"
 
+#include <QAbstractItemView>
 #include <QApplication>
+#include <QDate>
 #include <QComboBox>
 #include <QDialog>
 #include <QDialogButtonBox>
@@ -12,17 +14,48 @@
 #include <QHeaderView>
 #include <QLabel>
 #include <QLineEdit>
+#include <QListWidget>
 #include <QMessageBox>
 #include <QPushButton>
 #include <QSqlError>
 #include <QSqlQuery>
 #include <QStackedWidget>
 #include <QSpinBox>
+#include <QTabBar>
 #include <QTabWidget>
 #include <QTableWidget>
 #include <QTableWidgetItem>
 #include <QVariant>
+#include <QVector>
 #include <QVBoxLayout>
+
+#include <algorithm>
+
+namespace {
+QDate leerFecha(const QString &text)
+{
+    QDate fecha = QDate::fromString(text.trimmed(), "dd/MM/yyyy");
+    if (!fecha.isValid()) {
+        fecha = QDate::fromString(text.trimmed().left(10), Qt::ISODate);
+    }
+    return fecha;
+}
+
+QString fechaVisual(const QString &text)
+{
+    if (text.trimmed().isEmpty()) {
+        return {};
+    }
+    const QDate fecha = leerFecha(text);
+    return fecha.isValid() ? fecha.toString("dd/MM/yyyy") : text;
+}
+
+QString fechaParaBase(const QString &text)
+{
+    const QDate fecha = leerFecha(text);
+    return fecha.isValid() ? fecha.toString(Qt::ISODate) : text;
+}
+}
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -39,13 +72,21 @@ MainWindow::MainWindow(QWidget *parent)
     , marcasTable(nullptr)
     , mediosPagoTable(nullptr)
     , estadosServicioTable(nullptr)
+    , movimientosTable(nullptr)
+    , productosBajoStockList(nullptr)
     , configTabs(nullptr)
     , connectionLabel(nullptr)
     , sectionTitle(nullptr)
+    , clientesCountLabel(nullptr)
+    , productosCountLabel(nullptr)
+    , ventasCountLabel(nullptr)
+    , serviciosCountLabel(nullptr)
+    , dashboardSequence(0)
 {
     ui->setupUi(this);
     buildInterface();
     connectDatabase();
+    actualizarDashboard();
     loadClientes();
 }
 
@@ -92,15 +133,22 @@ void MainWindow::buildInterface()
             background: transparent;
             color: #e5e7eb;
             border: none;
+            border-left: 4px solid transparent;
             border-radius: 6px;
             padding: 11px 14px;
             text-align: left;
             font-size: 14px;
         }
-        QPushButton#menuButton:hover {
+        QPushButton#menuButton[active="false"]:hover {
             background: #2a0f12;
             color: #ffffff;
+            border-left: 4px solid #7f1d1d;
+        }
+        QPushButton#menuButton[active="true"] {
+            background: #3a1117;
+            color: #ffffff;
             border-left: 4px solid #dc2626;
+            font-weight: 700;
         }
         QPushButton#primaryButton {
             background: #dc2626;
@@ -227,7 +275,10 @@ void MainWindow::buildInterface()
     QPushButton *btnServicios = createMenuButton("Servicios");
     QPushButton *btnCompras = createMenuButton("Compras");
     QPushButton *btnFacturacion = createMenuButton("Facturacion");
-    QPushButton *btnConfig = createMenuButton("Configuracion");
+    QPushButton *btnConfig = createMenuButton("Datos generales");
+
+    menuButtons = {btnInicio, btnClientes, btnProductos, btnVentas,
+                   btnServicios, btnCompras, btnFacturacion, btnConfig};
 
     sidebarLayout->addWidget(btnInicio);
     sidebarLayout->addWidget(btnClientes);
@@ -272,44 +323,54 @@ void MainWindow::buildInterface()
     rootLayout->addWidget(content);
 
     setCentralWidget(root);
+    marcarSeccionActiva(btnInicio);
 
-    connect(btnInicio, &QPushButton::clicked, this, [this]() {
+    connect(btnInicio, &QPushButton::clicked, this, [this, btnInicio]() {
         sectionTitle->setText("Inicio");
         pages->setCurrentIndex(0);
+        marcarSeccionActiva(btnInicio);
+        actualizarDashboard();
     });
-    connect(btnClientes, &QPushButton::clicked, this, [this]() {
+    connect(btnClientes, &QPushButton::clicked, this, [this, btnClientes]() {
         sectionTitle->setText("Clientes");
         pages->setCurrentIndex(1);
+        marcarSeccionActiva(btnClientes);
         loadClientes();
     });
-    connect(btnProductos, &QPushButton::clicked, this, [this]() {
+    connect(btnProductos, &QPushButton::clicked, this, [this, btnProductos]() {
         sectionTitle->setText("Productos");
         pages->setCurrentIndex(2);
+        marcarSeccionActiva(btnProductos);
         loadProductos();
     });
-    connect(btnVentas, &QPushButton::clicked, this, [this]() {
+    connect(btnVentas, &QPushButton::clicked, this, [this, btnVentas]() {
         sectionTitle->setText("Ventas");
         pages->setCurrentIndex(3);
+        marcarSeccionActiva(btnVentas);
         loadVentas();
     });
-    connect(btnServicios, &QPushButton::clicked, this, [this]() {
+    connect(btnServicios, &QPushButton::clicked, this, [this, btnServicios]() {
         sectionTitle->setText("Servicios");
         pages->setCurrentIndex(4);
+        marcarSeccionActiva(btnServicios);
         loadServicios();
     });
-    connect(btnCompras, &QPushButton::clicked, this, [this]() {
+    connect(btnCompras, &QPushButton::clicked, this, [this, btnCompras]() {
         sectionTitle->setText("Compras");
         pages->setCurrentIndex(5);
+        marcarSeccionActiva(btnCompras);
         loadCompras();
     });
-    connect(btnFacturacion, &QPushButton::clicked, this, [this]() {
+    connect(btnFacturacion, &QPushButton::clicked, this, [this, btnFacturacion]() {
         sectionTitle->setText("Facturacion");
         pages->setCurrentIndex(6);
+        marcarSeccionActiva(btnFacturacion);
         loadFacturas();
     });
-    connect(btnConfig, &QPushButton::clicked, this, [this]() {
-        sectionTitle->setText("Configuracion");
+    connect(btnConfig, &QPushButton::clicked, this, [this, btnConfig]() {
+        sectionTitle->setText("Datos generales");
         pages->setCurrentIndex(7);
+        marcarSeccionActiva(btnConfig);
         loadConfiguracion();
     });
 }
@@ -319,43 +380,106 @@ QWidget *MainWindow::createDashboardPage()
     QWidget *page = new QWidget;
     QVBoxLayout *layout = new QVBoxLayout(page);
     layout->setContentsMargins(0, 0, 0, 0);
-    layout->setSpacing(18);
+    layout->setSpacing(10);
 
     QLabel *welcome = new QLabel("Panel general del sistema de gestion", page);
     welcome->setStyleSheet("font-size: 16px; color: #d1d5db;");
 
     QGridLayout *cards = new QGridLayout;
-    cards->setSpacing(16);
+    cards->setSpacing(12);
 
-    const QString cardStyle = "QFrame#card { padding: 16px; }";
+    const QString cardStyle = "QFrame#card { padding: 10px; }";
 
-    auto makeCard = [&](const QString &title, const QString &value) {
+    auto makeCard = [&](const QString &title, QLabel **valueLabelPointer) {
         QFrame *card = new QFrame(page);
         card->setObjectName("card");
         card->setStyleSheet(cardStyle);
+        card->setFixedHeight(118);
         QVBoxLayout *cardLayout = new QVBoxLayout(card);
+        cardLayout->setContentsMargins(14, 10, 14, 10);
+        cardLayout->setSpacing(4);
         QLabel *titleLabel = new QLabel(title, card);
-        QLabel *valueLabel = new QLabel(value, card);
-        titleLabel->setObjectName("cardTitle");
-        valueLabel->setObjectName("cardValue");
+        QLabel *valueLabel = new QLabel("0", card);
+        titleLabel->setStyleSheet("color: #f87171; font-size: 16px; font-weight: 600;");
+        valueLabel->setStyleSheet("color: #f8fafc; font-size: 34px; font-weight: 700;");
+        *valueLabelPointer = valueLabel;
         cardLayout->addWidget(titleLabel);
         cardLayout->addWidget(valueLabel);
         return card;
     };
 
-    cards->addWidget(makeCard("Clientes", "Gestion"), 0, 0);
-    cards->addWidget(makeCard("Productos", "Stock"), 0, 1);
-    cards->addWidget(makeCard("Ventas", "Facturas"), 0, 2);
-    cards->addWidget(makeCard("Servicios", "Arreglos"), 1, 0);
-    cards->addWidget(makeCard("Compras", "Proveedores"), 1, 1);
-    cards->addWidget(makeCard("Base de datos", "MySQL + ODBC"), 1, 2);
+    cards->addWidget(makeCard("Clientes registrados", &clientesCountLabel), 0, 0);
+    cards->addWidget(makeCard("Productos registrados", &productosCountLabel), 0, 1);
+    cards->addWidget(makeCard("Ventas registradas", &ventasCountLabel), 0, 2);
+    cards->addWidget(makeCard("Servicios registrados", &serviciosCountLabel), 0, 3);
 
-    QLabel *note = new QLabel("Panel inicial de la interfaz grafica del sistema My Chemical Music.", page);
-    note->setStyleSheet("color: #9ca3af; font-size: 13px;");
+    QFrame *movimientosPanel = new QFrame(page);
+    movimientosPanel->setObjectName("dashboardPanel");
+    movimientosPanel->setStyleSheet(
+        "QFrame#dashboardPanel { background: #18181b; border: 1px solid #3f3f46; border-radius: 8px; }"
+    );
+    QVBoxLayout *movimientosLayout = new QVBoxLayout(movimientosPanel);
+    movimientosLayout->setContentsMargins(12, 12, 12, 12);
+    movimientosLayout->setSpacing(8);
+
+    QLabel *movimientosTitle = new QLabel("Últimos movimientos", movimientosPanel);
+    movimientosTitle->setStyleSheet("color: #f8fafc; font-size: 18px; font-weight: 700;");
+
+    movimientosTable = new QTableWidget(movimientosPanel);
+    movimientosTable->setStyleSheet("QTableWidget { border: none; border-radius: 0px; }");
+    movimientosTable->setColumnCount(3);
+    movimientosTable->setHorizontalHeaderLabels({"Tipo", "Descripción", "Fecha"});
+    movimientosTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    movimientosTable->setSelectionBehavior(QAbstractItemView::SelectRows);
+    movimientosTable->setSelectionMode(QAbstractItemView::SingleSelection);
+    movimientosTable->setAlternatingRowColors(true);
+    movimientosTable->verticalHeader()->setVisible(false);
+    movimientosTable->verticalHeader()->setDefaultSectionSize(38);
+    movimientosTable->horizontalHeader()->setFixedHeight(36);
+    movimientosTable->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
+    movimientosTable->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
+    movimientosTable->horizontalHeader()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
+    movimientosTable->setFixedHeight(36 + (7 * 38));
+
+    movimientosLayout->addWidget(movimientosTitle);
+    movimientosLayout->addWidget(movimientosTable);
+
+    QFrame *stockPanel = new QFrame(page);
+    stockPanel->setObjectName("dashboardPanel");
+    stockPanel->setStyleSheet(
+        "QFrame#dashboardPanel { background: #18181b; border: 1px solid #3f3f46; border-radius: 8px; }"
+    );
+    QVBoxLayout *stockLayout = new QVBoxLayout(stockPanel);
+    stockLayout->setContentsMargins(12, 12, 12, 12);
+    stockLayout->setSpacing(8);
+
+    QLabel *stockTitle = new QLabel("Productos bajos en stock", stockPanel);
+    stockTitle->setStyleSheet("color: #f8fafc; font-size: 18px; font-weight: 700;");
+
+    productosBajoStockList = new QListWidget(stockPanel);
+    productosBajoStockList->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    productosBajoStockList->setSelectionMode(QAbstractItemView::NoSelection);
+    productosBajoStockList->setStyleSheet(
+        "QListWidget { background: #18181b; color: #f8fafc; border: none; }"
+        "QListWidget::item { padding: 9px 6px; border-bottom: 1px solid #2f2f35; }"
+    );
+
+    stockLayout->addWidget(stockTitle);
+    stockLayout->addWidget(productosBajoStockList);
+
+    const int panelHeight = 36 + (7 * 38) + 54;
+    movimientosPanel->setFixedHeight(panelHeight);
+    stockPanel->setFixedHeight(panelHeight);
+
+    QHBoxLayout *dashboardPanels = new QHBoxLayout;
+    dashboardPanels->setContentsMargins(0, 0, 0, 0);
+    dashboardPanels->setSpacing(12);
+    dashboardPanels->addWidget(movimientosPanel, 1);
+    dashboardPanels->addWidget(stockPanel, 1);
 
     layout->addWidget(welcome);
     layout->addLayout(cards);
-    layout->addWidget(note);
+    layout->addLayout(dashboardPanels);
     layout->addStretch();
     return page;
 }
@@ -539,8 +663,6 @@ QWidget *MainWindow::createConfiguracionPage()
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(14);
 
-    QHBoxLayout *toolbar = new QHBoxLayout;
-
     QPushButton *btnRefresh = new QPushButton("Actualizar", page);
     btnRefresh->setObjectName("primaryButton");
     QPushButton *btnAdd = new QPushButton("Agregar", page);
@@ -550,19 +672,29 @@ QWidget *MainWindow::createConfiguracionPage()
     QPushButton *btnDelete = new QPushButton("Eliminar", page);
     btnDelete->setObjectName("secondaryButton");
 
-    toolbar->addStretch();
-    toolbar->addWidget(btnRefresh);
-    toolbar->addWidget(btnAdd);
-    toolbar->addWidget(btnEdit);
-    toolbar->addWidget(btnDelete);
-
     configTabs = new QTabWidget(page);
     configTabs->addTab(createConfigTab(&categoriasTable, {"ID", "Nombre", "Descripcion"}, true), "Categorias");
     configTabs->addTab(createConfigTab(&marcasTable, {"ID", "Nombre"}, false), "Marcas");
     configTabs->addTab(createConfigTab(&mediosPagoTable, {"ID", "Nombre"}, false), "Medios de pago");
     configTabs->addTab(createConfigTab(&estadosServicioTable, {"ID", "Nombre"}, false), "Estados servicio");
+    configTabs->setStyleSheet(
+        "QTabWidget::pane { top: 12px; background-color: #18181b; }"
+        "QTabBar::tab { min-width: 82px; padding: 9px 10px; }"
+    );
 
-    layout->addLayout(toolbar);
+    QWidget *actions = new QWidget(configTabs);
+    QHBoxLayout *toolbar = new QHBoxLayout(actions);
+    toolbar->setContentsMargins(6, 0, 6, 0);
+    toolbar->setSpacing(6);
+
+    for (QPushButton *button : {btnRefresh, btnAdd, btnEdit, btnDelete}) {
+        button->setFixedHeight(36);
+        button->setMinimumWidth(78);
+        toolbar->addWidget(button);
+    }
+
+    configTabs->setCornerWidget(actions, Qt::TopRightCorner);
+
     layout->addWidget(configTabs);
 
     connect(btnRefresh, &QPushButton::clicked, this, &MainWindow::refreshConfigTab);
@@ -579,14 +711,18 @@ QWidget *MainWindow::createConfiguracionPage()
 QWidget *MainWindow::createConfigTab(QTableWidget **table, const QStringList &headers, bool hasDescription)
 {
     QWidget *page = new QWidget;
+    page->setObjectName("configContent");
+    page->setStyleSheet("QWidget#configContent { background-color: #18181b; }");
     QVBoxLayout *layout = new QVBoxLayout(page);
-    layout->setContentsMargins(12, 12, 12, 12);
-    layout->setSpacing(12);
+    layout->setContentsMargins(14, 14, 14, 14);
+    layout->setSpacing(14);
 
     QLineEdit *search = new QLineEdit(page);
     search->setPlaceholderText("Buscar...");
 
     *table = new QTableWidget(page);
+    (*table)->setStyleSheet("QTableWidget { background-color: #18181b; border: none; border-radius: 0px; }");
+    (*table)->viewport()->setStyleSheet("background-color: #18181b;");
     (*table)->setColumnCount(headers.size());
     (*table)->setHorizontalHeaderLabels(headers);
     (*table)->horizontalHeader()->setStretchLastSection(true);
@@ -619,9 +755,20 @@ QPushButton *MainWindow::createMenuButton(const QString &text)
 {
     QPushButton *button = new QPushButton(text);
     button->setObjectName("menuButton");
+    button->setProperty("active", false);
     button->setCursor(Qt::PointingHandCursor);
     button->setMinimumHeight(42);
     return button;
+}
+
+void MainWindow::marcarSeccionActiva(QPushButton *activeButton)
+{
+    for (QPushButton *button : menuButtons) {
+        button->setProperty("active", button == activeButton);
+        button->style()->unpolish(button);
+        button->style()->polish(button);
+        button->update();
+    }
 }
 
 void MainWindow::connectDatabase()
@@ -639,6 +786,171 @@ void MainWindow::connectDatabase()
 
     connectionLabel->setText("Conectado a MySQL por ODBC");
     connectionLabel->setStyleSheet("color: #22c55e;");
+}
+
+void MainWindow::actualizarDashboard()
+{
+    if (!movimientosTable || !productosBajoStockList) {
+        return;
+    }
+
+    movimientosTable->clearSpans();
+    movimientosTable->setRowCount(0);
+    productosBajoStockList->clear();
+
+    if (!db.isOpen()) {
+        clientesCountLabel->setText("0");
+        productosCountLabel->setText("0");
+        ventasCountLabel->setText("0");
+        serviciosCountLabel->setText("0");
+        movimientosTable->insertRow(0);
+        movimientosTable->setItem(0, 0, new QTableWidgetItem("No hay movimientos registrados"));
+        movimientosTable->setSpan(0, 0, 1, 3);
+        productosBajoStockList->addItem("No hay productos bajos en stock");
+        return;
+    }
+
+    auto actualizarCantidad = [this](QLabel *label, const QString &tabla) {
+        QSqlQuery query(db);
+        if (query.exec("SELECT COUNT(*) FROM " + tabla) && query.next()) {
+            label->setText(query.value(0).toString());
+        } else {
+            label->setText("0");
+        }
+    };
+
+    actualizarCantidad(clientesCountLabel, "clientes");
+    actualizarCantidad(productosCountLabel, "productos");
+    actualizarCantidad(ventasCountLabel, "ventas");
+    actualizarCantidad(serviciosCountLabel, "servicios");
+
+    QSqlQuery stockQuery(db);
+    if (stockQuery.exec("SELECT nombre, stock FROM productos "
+                        "WHERE stock <= 3 ORDER BY stock ASC, nombre ASC")) {
+        while (stockQuery.next()) {
+            const QString nombre = stockQuery.value(0).toString();
+            const int stock = stockQuery.value(1).toInt();
+            const QString unidades = stock == 1 ? " unidad" : " unidades";
+            const QString texto = QString(QChar(0x26A0)) + " " + nombre + " "
+                                + QString(QChar(0x2014)) + " "
+                                + QString::number(stock) + unidades;
+            productosBajoStockList->addItem(texto);
+        }
+    }
+
+    if (productosBajoStockList->count() == 0) {
+        productosBajoStockList->addItem("No hay productos bajos en stock");
+    }
+
+    struct Movimiento {
+        QString clave;
+        QString tipo;
+        QString descripcion;
+        QString fechaTexto;
+        QDate fecha;
+        int id;
+        quint64 ordenDetectado = 0;
+    };
+
+    QVector<Movimiento> movimientos;
+
+    auto agregarMovimientos = [this, &movimientos](const QString &sql,
+                                                   const QString &tipo,
+                                                   const QString &descripcionInicial,
+                                                   const QString &descripcionFinal,
+                                                   bool tieneNombre,
+                                                   bool tieneFecha) {
+        QSqlQuery query(db);
+        if (!query.exec(sql)) {
+            return;
+        }
+
+        const int inicio = movimientos.size();
+        int maxId = 0;
+        while (query.next()) {
+            Movimiento movimiento;
+            movimiento.id = query.value(0).toInt();
+            movimiento.tipo = tipo;
+            movimiento.clave = tipo + ":" + QString::number(movimiento.id);
+            movimiento.ordenDetectado = dashboardDetectedOrder.value(movimiento.clave, 0);
+            maxId = std::max(maxId, movimiento.id);
+            const QString referencia = tieneNombre ? query.value(1).toString()
+                                                   : QString::number(movimiento.id);
+            movimiento.descripcion = descripcionInicial + referencia + descripcionFinal;
+            if (tieneFecha) {
+                movimiento.fecha = QDate::fromString(query.value(2).toString().left(10), Qt::ISODate);
+                movimiento.fechaTexto = movimiento.fecha.isValid()
+                    ? movimiento.fecha.toString("dd/MM/yyyy")
+                    : query.value(2).toString();
+            }
+            movimientos.append(movimiento);
+        }
+
+        if (!dashboardMaxId.contains(tipo)) {
+            dashboardMaxId.insert(tipo, maxId);
+            return;
+        }
+
+        const int anteriorMaxId = dashboardMaxId.value(tipo);
+        for (int index = movimientos.size() - 1; index >= inicio; --index) {
+            Movimiento &movimiento = movimientos[index];
+            if (movimiento.id > anteriorMaxId && !dashboardDetectedOrder.contains(movimiento.clave)) {
+                const quint64 orden = ++dashboardSequence;
+                dashboardDetectedOrder.insert(movimiento.clave, orden);
+                movimiento.ordenDetectado = orden;
+            }
+        }
+        dashboardMaxId.insert(tipo, std::max(anteriorMaxId, maxId));
+    };
+
+    agregarMovimientos("SELECT id_cliente, CONCAT(nombre, ' ', apellido) "
+                       "FROM clientes ORDER BY id_cliente DESC LIMIT 7",
+                       "Cliente", "Se agregó el cliente ", ".", true, false);
+    agregarMovimientos("SELECT id_producto, nombre "
+                       "FROM productos ORDER BY id_producto DESC LIMIT 7",
+                       "Producto", "Se agregó el producto ", ".", true, false);
+    agregarMovimientos("SELECT id_venta, id_venta, fecha "
+                       "FROM ventas ORDER BY id_venta DESC LIMIT 7",
+                       "Venta", "Se registró la venta N.º ", ".", false, true);
+    agregarMovimientos("SELECT id_servicio, id_servicio, fecha_ingreso "
+                       "FROM servicios ORDER BY id_servicio DESC LIMIT 7",
+                       "Servicio", "Se registró el servicio N.º ", ".", false, true);
+    agregarMovimientos("SELECT id_compra, id_compra, fecha "
+                       "FROM compras_proveedores ORDER BY id_compra DESC LIMIT 7",
+                       "Compra", "Se registró la compra N.º ", ".", false, true);
+    agregarMovimientos("SELECT id_factura, id_factura, fecha "
+                       "FROM facturas ORDER BY id_factura DESC LIMIT 7",
+                       "Factura", "Se generó la factura N.º ", ".", false, true);
+
+    std::stable_sort(movimientos.begin(), movimientos.end(), [](const Movimiento &a, const Movimiento &b) {
+        if (a.ordenDetectado != b.ordenDetectado) {
+            return a.ordenDetectado > b.ordenDetectado;
+        }
+        if (a.fecha.isValid() != b.fecha.isValid()) {
+            return a.fecha.isValid();
+        }
+        if (a.fecha.isValid() && a.fecha != b.fecha) {
+            return a.fecha > b.fecha;
+        }
+        if (a.tipo == b.tipo) {
+            return a.id > b.id;
+        }
+        return false;
+    });
+
+    const int cantidad = std::min(7, static_cast<int>(movimientos.size()));
+    for (int row = 0; row < cantidad; ++row) {
+        movimientosTable->insertRow(row);
+        movimientosTable->setItem(row, 0, new QTableWidgetItem(movimientos[row].tipo));
+        movimientosTable->setItem(row, 1, new QTableWidgetItem(movimientos[row].descripcion));
+        movimientosTable->setItem(row, 2, new QTableWidgetItem(movimientos[row].fechaTexto));
+    }
+
+    if (cantidad == 0) {
+        movimientosTable->insertRow(0);
+        movimientosTable->setItem(0, 0, new QTableWidgetItem("No hay movimientos registrados"));
+        movimientosTable->setSpan(0, 0, 1, 3);
+    }
 }
 
 void MainWindow::fillTable(QTableWidget *table, const QStringList &headers, const QString &sql)
@@ -730,7 +1042,7 @@ void MainWindow::loadVentas()
     fillTable(
         ventasTable,
         {"ID", "Cliente", "Fecha", "Total", "Medio de pago"},
-        "SELECT v.id_venta, CONCAT(c.nombre, ' ', c.apellido), v.fecha, v.total, mp.nombre "
+        "SELECT v.id_venta, CONCAT(c.nombre, ' ', c.apellido), DATE_FORMAT(v.fecha, '%d/%m/%Y'), v.total, mp.nombre "
         "FROM ventas v "
         "LEFT JOIN clientes c ON v.id_cliente = c.id_cliente "
         "LEFT JOIN medios_pago mp ON v.id_medio_pago = mp.id_medio_pago "
@@ -744,7 +1056,7 @@ void MainWindow::loadServicios()
         serviciosTable,
         {"ID", "Cliente", "Instrumento", "Descripcion", "Ingreso", "Entrega", "Precio", "Estado"},
         "SELECT s.id_servicio, CONCAT(c.nombre, ' ', c.apellido), s.instrumento, s.descripcion, "
-        "s.fecha_ingreso, s.fecha_entrega, s.precio, es.nombre "
+        "DATE_FORMAT(s.fecha_ingreso, '%d/%m/%Y'), DATE_FORMAT(s.fecha_entrega, '%d/%m/%Y'), s.precio, es.nombre "
         "FROM servicios s "
         "LEFT JOIN clientes c ON s.id_cliente = c.id_cliente "
         "LEFT JOIN estados_servicio es ON s.id_estado_servicio = es.id_estado_servicio "
@@ -757,7 +1069,7 @@ void MainWindow::loadCompras()
     fillTable(
         comprasTable,
         {"ID", "Proveedor", "Fecha", "Total"},
-        "SELECT cp.id_compra, p.nombre, cp.fecha, cp.total "
+        "SELECT cp.id_compra, p.nombre, DATE_FORMAT(cp.fecha, '%d/%m/%Y'), cp.total "
         "FROM compras_proveedores cp "
         "LEFT JOIN proveedores p ON cp.id_proveedor = p.id_proveedor "
         "ORDER BY cp.id_compra DESC"
@@ -771,7 +1083,7 @@ void MainWindow::loadFacturas()
         {"ID", "Origen", "Referencia", "Numero", "Tipo", "Fecha", "Total"},
         "SELECT id_factura, "
         "CASE WHEN id_venta IS NOT NULL THEN 'Venta' ELSE 'Servicio' END, "
-        "COALESCE(id_venta, id_servicio), numero_factura, tipo_factura, fecha, total "
+        "COALESCE(id_venta, id_servicio), numero_factura, tipo_factura, DATE_FORMAT(fecha, '%d/%m/%Y'), total "
         "FROM facturas "
         "ORDER BY id_factura DESC"
     );
@@ -1019,13 +1331,13 @@ bool MainWindow::showServicioDialog(int &idCliente, QString &instrumento, QStrin
     QComboBox *clienteCombo = new QComboBox(&dialog);
     QLineEdit *instrumentoEdit = new QLineEdit(instrumento, &dialog);
     QLineEdit *descripcionEdit = new QLineEdit(descripcion, &dialog);
-    QLineEdit *fechaIngresoEdit = new QLineEdit(fechaIngreso, &dialog);
-    QLineEdit *fechaEntregaEdit = new QLineEdit(fechaEntrega, &dialog);
+    QLineEdit *fechaIngresoEdit = new QLineEdit(fechaVisual(fechaIngreso), &dialog);
+    QLineEdit *fechaEntregaEdit = new QLineEdit(fechaVisual(fechaEntrega), &dialog);
     QDoubleSpinBox *precioEdit = new QDoubleSpinBox(&dialog);
     QComboBox *estadoCombo = new QComboBox(&dialog);
 
-    fechaIngresoEdit->setPlaceholderText("YYYY-MM-DD");
-    fechaEntregaEdit->setPlaceholderText("YYYY-MM-DD");
+    fechaIngresoEdit->setPlaceholderText("DD/MM/AAAA");
+    fechaEntregaEdit->setPlaceholderText("DD/MM/AAAA");
     precioEdit->setMaximum(999999999);
     precioEdit->setDecimals(2);
     precioEdit->setValue(precio);
@@ -1060,6 +1372,11 @@ bool MainWindow::showServicioDialog(int &idCliente, QString &instrumento, QStrin
             QMessageBox::warning(&dialog, "Datos incompletos", "Instrumento y fecha de ingreso son obligatorios.");
             return;
         }
+        if (!leerFecha(fechaIngresoEdit->text()).isValid() ||
+            (!fechaEntregaEdit->text().trimmed().isEmpty() && !leerFecha(fechaEntregaEdit->text()).isValid())) {
+            QMessageBox::warning(&dialog, "Fecha incorrecta", "Las fechas deben tener el formato DD/MM/AAAA.");
+            return;
+        }
         dialog.accept();
     });
     connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
@@ -1071,8 +1388,8 @@ bool MainWindow::showServicioDialog(int &idCliente, QString &instrumento, QStrin
     idCliente = selectedComboId(clienteCombo);
     instrumento = instrumentoEdit->text().trimmed();
     descripcion = descripcionEdit->text().trimmed();
-    fechaIngreso = fechaIngresoEdit->text().trimmed();
-    fechaEntrega = fechaEntregaEdit->text().trimmed();
+    fechaIngreso = fechaParaBase(fechaIngresoEdit->text());
+    fechaEntrega = fechaEntregaEdit->text().trimmed().isEmpty() ? QString() : fechaParaBase(fechaEntregaEdit->text());
     precio = precioEdit->value();
     idEstadoServicio = selectedComboId(estadoCombo);
     return true;
@@ -1089,8 +1406,8 @@ bool MainWindow::showVentaHeaderDialog(int &idCliente, int &idMedioPago, QString
 
     QComboBox *clienteCombo = new QComboBox(&dialog);
     QComboBox *medioPagoCombo = new QComboBox(&dialog);
-    QLineEdit *fechaEdit = new QLineEdit(fecha, &dialog);
-    fechaEdit->setPlaceholderText("YYYY-MM-DD");
+    QLineEdit *fechaEdit = new QLineEdit(fechaVisual(fecha), &dialog);
+    fechaEdit->setPlaceholderText("DD/MM/AAAA");
 
     if (!fillCombo(clienteCombo, "SELECT id_cliente, CONCAT(nombre, ' ', apellido) FROM clientes ORDER BY apellido, nombre") ||
         !fillCombo(medioPagoCombo, "SELECT id_medio_pago, nombre FROM medios_pago ORDER BY id_medio_pago")) {
@@ -1113,6 +1430,10 @@ bool MainWindow::showVentaHeaderDialog(int &idCliente, int &idMedioPago, QString
             QMessageBox::warning(&dialog, "Datos incompletos", "La fecha es obligatoria.");
             return;
         }
+        if (!leerFecha(fechaEdit->text()).isValid()) {
+            QMessageBox::warning(&dialog, "Fecha incorrecta", "La fecha debe tener el formato DD/MM/AAAA.");
+            return;
+        }
         dialog.accept();
     });
     connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
@@ -1123,7 +1444,7 @@ bool MainWindow::showVentaHeaderDialog(int &idCliente, int &idMedioPago, QString
 
     idCliente = selectedComboId(clienteCombo);
     idMedioPago = selectedComboId(medioPagoCombo);
-    fecha = fechaEdit->text().trimmed();
+    fecha = fechaParaBase(fechaEdit->text());
     return true;
 }
 
@@ -1178,8 +1499,8 @@ bool MainWindow::showCompraHeaderDialog(int &idProveedor, QString &fecha)
     QFormLayout *form = new QFormLayout;
 
     QComboBox *proveedorCombo = new QComboBox(&dialog);
-    QLineEdit *fechaEdit = new QLineEdit(fecha, &dialog);
-    fechaEdit->setPlaceholderText("YYYY-MM-DD");
+    QLineEdit *fechaEdit = new QLineEdit(fechaVisual(fecha), &dialog);
+    fechaEdit->setPlaceholderText("DD/MM/AAAA");
 
     if (!fillCombo(proveedorCombo, "SELECT id_proveedor, nombre FROM proveedores ORDER BY nombre")) {
         return false;
@@ -1200,6 +1521,10 @@ bool MainWindow::showCompraHeaderDialog(int &idProveedor, QString &fecha)
             QMessageBox::warning(&dialog, "Datos incompletos", "La fecha es obligatoria.");
             return;
         }
+        if (!leerFecha(fechaEdit->text()).isValid()) {
+            QMessageBox::warning(&dialog, "Fecha incorrecta", "La fecha debe tener el formato DD/MM/AAAA.");
+            return;
+        }
         dialog.accept();
     });
     connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
@@ -1209,7 +1534,7 @@ bool MainWindow::showCompraHeaderDialog(int &idProveedor, QString &fecha)
     }
 
     idProveedor = selectedComboId(proveedorCombo);
-    fecha = fechaEdit->text().trimmed();
+    fecha = fechaParaBase(fechaEdit->text());
     return true;
 }
 
@@ -1271,9 +1596,9 @@ bool MainWindow::showFacturaDialog(int &idVenta, int &idServicio, QString &numer
     QComboBox *referenciaCombo = new QComboBox(&dialog);
     QLineEdit *numeroEdit = new QLineEdit(numeroFactura, &dialog);
     QComboBox *tipoCombo = new QComboBox(&dialog);
-    QLineEdit *fechaEdit = new QLineEdit(fecha, &dialog);
+    QLineEdit *fechaEdit = new QLineEdit(fechaVisual(fecha), &dialog);
     QLabel *totalLabel = new QLabel("$0", &dialog);
-    fechaEdit->setPlaceholderText("YYYY-MM-DD");
+    fechaEdit->setPlaceholderText("DD/MM/AAAA");
 
     origenCombo->addItem("Venta", "venta");
     origenCombo->addItem("Servicio", "servicio");
@@ -1355,6 +1680,10 @@ bool MainWindow::showFacturaDialog(int &idVenta, int &idServicio, QString &numer
             QMessageBox::warning(&dialog, "Datos incompletos", "Numero, tipo y fecha son obligatorios.");
             return;
         }
+        if (!leerFecha(fechaEdit->text()).isValid()) {
+            QMessageBox::warning(&dialog, "Fecha incorrecta", "La fecha debe tener el formato DD/MM/AAAA.");
+            return;
+        }
         dialog.accept();
     });
     connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
@@ -1372,7 +1701,7 @@ bool MainWindow::showFacturaDialog(int &idVenta, int &idServicio, QString &numer
     }
     numeroFactura = numeroEdit->text().trimmed();
     tipoFactura = tipoCombo->currentText();
-    fecha = fechaEdit->text().trimmed();
+    fecha = fechaParaBase(fechaEdit->text());
     return true;
 }
 
@@ -1431,6 +1760,7 @@ void MainWindow::addCliente()
     }
 
     loadClientes();
+    actualizarDashboard();
 }
 void MainWindow::editCliente()
 {
@@ -1549,6 +1879,7 @@ void MainWindow::addProducto()
     }
 
     loadProductos();
+    actualizarDashboard();
 }
 
 void MainWindow::editProducto()
@@ -1748,6 +2079,7 @@ void MainWindow::addVenta()
     QMessageBox::information(this, "Ventas", "Venta registrada.\nID venta: " + QString::number(idVenta) + "\nTotal: $" + QString::number(totalVenta, 'f', 2));
     loadVentas();
     loadProductos();
+    actualizarDashboard();
 }
 
 void MainWindow::showVentaDetails()
@@ -1814,6 +2146,7 @@ void MainWindow::addServicio()
     }
 
     loadServicios();
+    actualizarDashboard();
 }
 
 void MainWindow::editServicio()
@@ -2046,6 +2379,7 @@ void MainWindow::addCompra()
     QMessageBox::information(this, "Compras", "Compra registrada.\nID compra: " + QString::number(idCompra) + "\nTotal: $" + QString::number(totalCompra, 'f', 2));
     loadCompras();
     loadProductos();
+    actualizarDashboard();
 }
 
 void MainWindow::deleteCompra()
@@ -2140,6 +2474,7 @@ void MainWindow::addFactura()
     }
 
     loadFacturas();
+    actualizarDashboard();
 }
 
 void MainWindow::deleteFactura()
@@ -2174,7 +2509,7 @@ void MainWindow::deleteFactura()
 void MainWindow::addConfigItem()
 {
     if (!db.isOpen() || !configTabs) {
-        QMessageBox::warning(this, "Configuracion", "No hay conexion con la base de datos.");
+        QMessageBox::warning(this, "Datos generales", "No hay conexion con la base de datos.");
         return;
     }
 
@@ -2211,7 +2546,7 @@ void MainWindow::addConfigItem()
     }
 
     if (!query.exec()) {
-        QMessageBox::warning(this, "Configuracion", "No se pudo agregar:\n" + query.lastError().text());
+        QMessageBox::warning(this, "Datos generales", "No se pudo agregar:\n" + query.lastError().text());
         return;
     }
 
@@ -2221,7 +2556,7 @@ void MainWindow::addConfigItem()
 void MainWindow::editConfigItem()
 {
     if (!db.isOpen() || !configTabs) {
-        QMessageBox::warning(this, "Configuracion", "No hay conexion con la base de datos.");
+        QMessageBox::warning(this, "Datos generales", "No hay conexion con la base de datos.");
         return;
     }
 
@@ -2265,7 +2600,7 @@ void MainWindow::editConfigItem()
     }
 
     if (!query.exec()) {
-        QMessageBox::warning(this, "Configuracion", "No se pudo modificar:\n" + query.lastError().text());
+        QMessageBox::warning(this, "Datos generales", "No se pudo modificar:\n" + query.lastError().text());
         return;
     }
 
@@ -2275,7 +2610,7 @@ void MainWindow::editConfigItem()
 void MainWindow::deleteConfigItem()
 {
     if (!db.isOpen() || !configTabs) {
-        QMessageBox::warning(this, "Configuracion", "No hay conexion con la base de datos.");
+        QMessageBox::warning(this, "Datos generales", "No hay conexion con la base de datos.");
         return;
     }
 
@@ -2314,7 +2649,7 @@ void MainWindow::deleteConfigItem()
     query.addBindValue(id);
 
     if (!query.exec()) {
-        QMessageBox::warning(this, "Configuracion", "No se pudo eliminar:\n" + query.lastError().text());
+        QMessageBox::warning(this, "Datos generales", "No se pudo eliminar:\n" + query.lastError().text());
         return;
     }
 

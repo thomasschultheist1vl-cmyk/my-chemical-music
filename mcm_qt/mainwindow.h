@@ -2,12 +2,15 @@
 #define MAINWINDOW_H
 
 #include <QMainWindow>
+#include <QHash>
+#include <QList>
 #include <QSqlDatabase>
 #include <QStringList>
 
 class QComboBox;
 class QLabel;
 class QLineEdit;
+class QListWidget;
 class QPushButton;
 class QStackedWidget;
 class QTabWidget;
@@ -42,9 +45,19 @@ private:
     QTableWidget *marcasTable;
     QTableWidget *mediosPagoTable;
     QTableWidget *estadosServicioTable;
+    QTableWidget *movimientosTable;
+    QListWidget *productosBajoStockList;
     QTabWidget *configTabs;
     QLabel *connectionLabel;
     QLabel *sectionTitle;
+    QLabel *clientesCountLabel;
+    QLabel *productosCountLabel;
+    QLabel *ventasCountLabel;
+    QLabel *serviciosCountLabel;
+    QList<QPushButton *> menuButtons;
+    QHash<QString, int> dashboardMaxId;
+    QHash<QString, quint64> dashboardDetectedOrder;
+    quint64 dashboardSequence;
     QSqlDatabase db;
 
     void buildInterface();
@@ -54,7 +67,9 @@ private:
     QWidget *createConfiguracionPage();
     QWidget *createConfigTab(QTableWidget **table, const QStringList &headers, bool hasDescription);
     QPushButton *createMenuButton(const QString &text);
+    void marcarSeccionActiva(QPushButton *activeButton);
     void connectDatabase();
+    void actualizarDashboard();
     void fillTable(QTableWidget *table, const QStringList &headers, const QString &sql);
     bool fillCombo(QComboBox *combo, const QString &sql);
     int selectedComboId(QComboBox *combo) const;
