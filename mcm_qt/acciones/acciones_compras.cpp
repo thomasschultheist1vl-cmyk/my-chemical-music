@@ -146,30 +146,40 @@ void MainWindow::deleteCompra()
     loadCompras();
 }
 
-void MainWindow::showCompraDetails()
+void MainWindow::anularCompra()
 {
-    const int id = selectedId(comprasTable);
-    if (id <= 0) {
-        QMessageBox::information(this, "Detalles de compra", "Selecciona una compra de la tabla.");
+    if (!conexionBD.estaConectadoQt()) {
+        QMessageBox::warning(this, "Compras", "No hay conexion con la base de datos.");
         return;
     }
 
-    QDialog dialog(this);
-    dialog.setWindowTitle("Detalles de compra " + QString::number(id));
-    dialog.resize(760, 420);
+    const int id = selectedId(comprasTable);
+    if (id <= 0) {
+        QMessageBox::information(this, "Anular compra", "Selecciona una compra de la tabla.");
+        return;
+    }
 
-    QVBoxLayout *layout = new QVBoxLayout(&dialog);
-    QTableWidget *table = new QTableWidget(&dialog);
-    layout->addWidget(table);
+    if (selectedRowIsAnulada(comprasTable)) {
+        QMessageBox::information(this, "Anular compra", "La compra seleccionada ya esta anulada.");
+        return;
+    }
 
-    DetalleCompraDAO dao(conexionBD.getConexionQt());
-    fillTable(table, {"Producto", "Cantidad", "Precio compra", "Subtotal"}, dao.listarPorCompraQt(id));
+    QString motivo;
+    if (!requestAnulacionMotivo("Anular compra", "Desea anular la compra N.º " + QString::number(id) + "?\n\nMotivo de anulacion:", motivo)) {
+        return;
+    }
 
-    QDialogButtonBox *buttons = new QDialogButtonBox(QDialogButtonBox::Close, &dialog);
-    buttons->button(QDialogButtonBox::Close)->setText("Cerrar");
-    layout->addWidget(buttons);
-    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
-    dialog.exec();
+    CompraProveedorDAO dao(conexionBD.getConexionQt());
+    QString error;
+    if (!dao.anularCompraQt(id, motivo, &error)) {
+        QMessageBox::warning(this, "Compras", "No se pudo anular la compra:\n" + error);
+        return;
+    }
+
+    QMessageBox::information(this, "Compras", "Compra anulada correctamente.");
+    loadCompras();
+    loadProductos();
+    actualizarDashboard();
 }
 
 

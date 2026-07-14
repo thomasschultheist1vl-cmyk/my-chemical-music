@@ -26,6 +26,7 @@ public:
     QSqlQuery buscarQt(int id) const {
         QSqlQuery q(conexionQt); q.prepare("SELECT nombre, apellido, telefono, email, direccion, dni FROM clientes WHERE id_cliente = ?"); q.addBindValue(id); q.exec(); return q;
     }
+    QSqlQuery detalleQt(int id) const { QSqlQuery q(conexionQt); q.prepare("SELECT id_cliente, nombre, apellido, dni, telefono, email, direccion FROM clientes WHERE id_cliente = ?"); q.addBindValue(id); q.exec(); return q; }
     bool agregarQt(Cliente &c) const {
         QSqlQuery q(conexionQt); q.prepare("INSERT INTO clientes (nombre, apellido, telefono, email, direccion, dni) VALUES (?, ?, ?, ?, ?, ?)");
         q.addBindValue(QString::fromStdString(c.getNombre())); q.addBindValue(QString::fromStdString(c.getApellido())); q.addBindValue(QString::fromStdString(c.getTelefono())); q.addBindValue(QString::fromStdString(c.getEmail())); q.addBindValue(QString::fromStdString(c.getDireccion())); q.addBindValue(QString::fromStdString(c.getDni())); return q.exec();

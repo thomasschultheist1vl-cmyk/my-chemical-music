@@ -9,8 +9,12 @@
 #include <sqlext.h>
 #ifdef MCM_QT_APP
 #include <QSqlDatabase>
+#include <QSqlError>
 #include <QSqlQuery>
+#include <QString>
+#include <QPair>
 #include <QVariant>
+#include <QVector>
 #endif
 
 using namespace std;
@@ -19,7 +23,7 @@ class VentaDAO {
 public:
 #ifdef MCM_QT_APP
     explicit VentaDAO(const QSqlDatabase &conexion) : conexionQt(conexion) {}
-    QSqlQuery listarQt() const { QSqlQuery q(conexionQt); q.exec("SELECT v.id_venta, CONCAT(c.nombre, ' ', c.apellido), DATE_FORMAT(v.fecha, '%d/%m/%Y'), v.total, mp.nombre FROM ventas v LEFT JOIN clientes c ON v.id_cliente=c.id_cliente LEFT JOIN medios_pago mp ON v.id_medio_pago=mp.id_medio_pago ORDER BY v.id_venta DESC"); return q; }
+    QSqlQuery listarQt() const { QSqlQuery q(conexionQt); q.exec("SELECT v.id_venta, CONCAT(c.nombre, ' ', c.apellido), DATE_FORMAT(v.fecha, '%d/%m/%Y'), v.total, mp.nombre, v.estado, COALESCE(v.motivo_anulacion, ''), COALESCE(DATE_FORMAT(v.fecha_anulacion, '%d/%m/%Y %H:%i'), '') FROM ventas v LEFT JOIN clientes c ON v.id_cliente=c.id_cliente LEFT JOIN medios_pago mp ON v.id_medio_pago=mp.id_medio_pago ORDER BY v.id_venta DESC"); return q; }
     bool agregarQt(Venta &v) const { QSqlQuery q(conexionQt); q.prepare("INSERT INTO ventas (id_cliente, fecha, total, id_medio_pago) VALUES (?, ?, ?, ?)"); q.addBindValue(v.getIdCliente()); q.addBindValue(QString::fromStdString(v.getFecha())); q.addBindValue(v.getTotal()); q.addBindValue(v.getIdMedioPago()); return q.exec(); }
     int obtenerUltimoIdQt() const { QSqlQuery q(conexionQt); return q.exec("SELECT LAST_INSERT_ID()") && q.next() ? q.value(0).toInt() : 0; }
     bool actualizarTotalQt(int id, double total) const { QSqlQuery q(conexionQt); q.prepare("UPDATE ventas SET total=? WHERE id_venta=?"); q.addBindValue(total); q.addBindValue(id); return q.exec(); }
@@ -37,13 +41,79 @@ public:
             "LEFT JOIN detalle_ventas dv ON v.id_venta = dv.id_venta "
             "LEFT JOIN productos p ON dv.id_producto = p.id_producto "
             "LEFT JOIN facturas f ON v.id_venta = f.id_venta "
-            "WHERE f.id_factura IS NULL "
+            "WHERE f.id_factura IS NULL AND v.estado = 'Confirmada' "
             "GROUP BY v.id_venta, c.nombre, c.apellido, v.total "
             "ORDER BY v.id_venta DESC"
         );
         return q;
     }
+    QSqlQuery anulacionQt(int id) const { QSqlQuery q(conexionQt); q.prepare("SELECT estado, COALESCE(motivo_anulacion, ''), COALESCE(DATE_FORMAT(fecha_anulacion, '%d/%m/%Y %H:%i'), '') FROM ventas WHERE id_venta=?"); q.addBindValue(id); q.exec(); return q; }
+    bool estaAnuladaQt(int id) const { QSqlQuery q = anulacionQt(id); return q.next() && q.value(0).toString() == "Anulada"; }
+    bool anularVentaQt(int id, const QString &motivo, QString *error = nullptr) {
+        auto setError = [error](const QString &texto) { if (error) *error = texto; };
+        if (!conexionQt.transaction()) {
+            setError(conexionQt.lastError().text());
+            return false;
+        }
+
+        QSqlQuery estado(conexionQt);
+        estado.prepare("SELECT estado FROM ventas WHERE id_venta=? FOR UPDATE");
+        estado.addBindValue(id);
+        if (!estado.exec() || !estado.next()) {
+            setError(estado.lastError().isValid() ? estado.lastError().text() : "No se encontro la venta.");
+            conexionQt.rollback();
+            return false;
+        }
+        if (estado.value(0).toString() == "Anulada") {
+            setError("La venta ya esta anulada.");
+            conexionQt.rollback();
+            return false;
+        }
+
+        QVector<QPair<int, int>> detalles;
+        QSqlQuery detalle(conexionQt);
+        detalle.prepare("SELECT id_producto, cantidad FROM detalle_ventas WHERE id_venta=?");
+        detalle.addBindValue(id);
+        if (!detalle.exec()) {
+            setError(detalle.lastError().text());
+            conexionQt.rollback();
+            return false;
+        }
+        while (detalle.next()) {
+            detalles.append(qMakePair(detalle.value(0).toInt(), detalle.value(1).toInt()));
+        }
+
+        for (const QPair<int, int> &item : detalles) {
+            QSqlQuery stock(conexionQt);
+            stock.prepare("UPDATE productos SET stock = stock + ? WHERE id_producto = ?");
+            stock.addBindValue(item.second);
+            stock.addBindValue(item.first);
+            if (!stock.exec()) {
+                setError(stock.lastError().text());
+                conexionQt.rollback();
+                return false;
+            }
+        }
+
+        QSqlQuery update(conexionQt);
+        update.prepare("UPDATE ventas SET estado='Anulada', motivo_anulacion=?, fecha_anulacion=NOW() WHERE id_venta=? AND estado <> 'Anulada'");
+        update.addBindValue(motivo);
+        update.addBindValue(id);
+        if (!update.exec() || update.numRowsAffected() == 0) {
+            setError(update.lastError().isValid() ? update.lastError().text() : "No se pudo anular la venta.");
+            conexionQt.rollback();
+            return false;
+        }
+
+        if (!conexionQt.commit()) {
+            setError(conexionQt.lastError().text());
+            conexionQt.rollback();
+            return false;
+        }
+        return true;
+    }
     QSqlQuery totalQt(int id) const { QSqlQuery q(conexionQt); q.prepare("SELECT total FROM ventas WHERE id_venta=?"); q.addBindValue(id); q.exec(); return q; }
+    QSqlQuery detalleQt(int id) const { QSqlQuery q(conexionQt); q.prepare("SELECT v.id_venta, CONCAT(c.nombre, ' ', c.apellido), DATE_FORMAT(v.fecha, '%d/%m/%Y'), mp.nombre, v.estado, v.total, COALESCE(v.motivo_anulacion, ''), COALESCE(DATE_FORMAT(v.fecha_anulacion, '%d/%m/%Y %H:%i'), '') FROM ventas v LEFT JOIN clientes c ON v.id_cliente=c.id_cliente LEFT JOIN medios_pago mp ON v.id_medio_pago=mp.id_medio_pago WHERE v.id_venta=?"); q.addBindValue(id); q.exec(); return q; }
     QSqlQuery contarQt() const { QSqlQuery q(conexionQt); q.exec("SELECT COUNT(*) FROM ventas"); return q; }
     QSqlQuery ultimosQt(int limite=7) const { QSqlQuery q(conexionQt); q.prepare("SELECT id_venta, id_venta, fecha FROM ventas ORDER BY fecha DESC, id_venta DESC LIMIT ?"); q.addBindValue(limite); q.exec(); return q; }
 #endif

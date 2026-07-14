@@ -20,7 +20,8 @@ public:
 #ifdef MCM_QT_APP
     explicit EstadoServicioDAO(const QSqlDatabase &db) : conexionQt(db) {}
     QSqlQuery listarQt() const { QSqlQuery q(conexionQt); q.exec("SELECT id_estado_servicio, nombre FROM estados_servicio ORDER BY id_estado_servicio"); return q; }
-    QSqlQuery paraComboQt() const { return listarQt(); }
+    QSqlQuery paraComboQt() const { QSqlQuery q(conexionQt); q.exec("SELECT id_estado_servicio, nombre FROM estados_servicio WHERE nombre <> 'Anulado' ORDER BY id_estado_servicio"); return q; }
+    QSqlQuery detalleQt(int id) const { QSqlQuery q(conexionQt); q.prepare("SELECT id_estado_servicio, nombre FROM estados_servicio WHERE id_estado_servicio=?"); q.addBindValue(id); q.exec(); return q; }
     bool agregarQt(EstadoServicio &e) const { QSqlQuery q(conexionQt); q.prepare("INSERT INTO estados_servicio (nombre) VALUES (?)"); q.addBindValue(QString::fromStdString(e.getNombre())); return q.exec(); }
     bool modificarQt(EstadoServicio &e) const { QSqlQuery q(conexionQt); q.prepare("UPDATE estados_servicio SET nombre=? WHERE id_estado_servicio=?"); q.addBindValue(QString::fromStdString(e.getNombre())); q.addBindValue(e.getIdEstadoServicio()); return q.exec(); }
     bool eliminarQt(int id) const { QSqlQuery q(conexionQt); q.prepare("DELETE FROM estados_servicio WHERE id_estado_servicio=?"); q.addBindValue(id); return q.exec(); }

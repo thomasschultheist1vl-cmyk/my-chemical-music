@@ -45,6 +45,7 @@ set(PROJECT_SOURCES
     mcm_qt/formularios/formularios_compras.cpp
     mcm_qt/formularios/formularios_facturacion.cpp
     mcm_qt/formularios/formularios_datos_generales.cpp
+    mcm_qt/utilidades/utilidades_detalles.cpp
     mcm_qt/utilidades/utilidades_seleccion.cpp
     mcm_qt/utilidades/utilidades_fecha.h
     mcm_qt/ventana_principal.h

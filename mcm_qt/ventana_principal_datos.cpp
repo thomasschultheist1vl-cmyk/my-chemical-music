@@ -13,6 +13,7 @@
 
 #include <QAbstractItemView>
 #include <QApplication>
+#include <QColor>
 #include <QDate>
 #include <QComboBox>
 #include <QDialog>
@@ -20,6 +21,7 @@
 #include <QDoubleSpinBox>
 #include <QFormLayout>
 #include <QFrame>
+#include <QFont>
 #include <QGridLayout>
 #include <QHeaderView>
 #include <QLabel>
@@ -262,10 +264,37 @@ void MainWindow::fillTable(QTableWidget *table, const QStringList &headers, QSql
     }
 
     int row = 0;
+    const int estadoCol = columnIndex(table, "Estado");
+    const int motivoCol = columnIndex(table, "Motivo anulacion");
+    const int fechaAnulacionCol = columnIndex(table, "Fecha anulacion");
     while (query.next()) {
         table->insertRow(row);
         for (int col = 0; col < headers.size(); ++col) {
             table->setItem(row, col, new QTableWidgetItem(query.value(col).toString()));
+        }
+
+        if (estadoCol >= 0) {
+            const QString estado = table->item(row, estadoCol) ? table->item(row, estadoCol)->text() : QString();
+            if (estado == "Anulada" || estado == "Anulado") {
+                const QString motivo = motivoCol >= 0 && table->item(row, motivoCol) ? table->item(row, motivoCol)->text() : QString();
+                const QString fecha = fechaAnulacionCol >= 0 && table->item(row, fechaAnulacionCol) ? table->item(row, fechaAnulacionCol)->text() : QString();
+                const QString tooltip = "Estado: " + estado + "\nMotivo: " + motivo + "\nFecha anulacion: " + fecha;
+
+                for (int col = 0; col < headers.size(); ++col) {
+                    QTableWidgetItem *item = table->item(row, col);
+                    if (!item) {
+                        continue;
+                    }
+                    item->setBackground(QColor("#3a1f24"));
+                    item->setForeground(QColor("#fecaca"));
+                    item->setToolTip(tooltip);
+                    if (col == estadoCol) {
+                        QFont font = item->font();
+                        font.setBold(true);
+                        item->setFont(font);
+                    }
+                }
+            }
         }
         ++row;
     }
@@ -315,25 +344,37 @@ void MainWindow::loadProductos()
 void MainWindow::loadVentas()
 {
     VentaDAO dao(conexionBD.getConexionQt());
-    fillTable(ventasTable, {"ID", "Cliente", "Fecha", "Total", "Medio de pago"}, dao.listarQt());
+    fillTable(ventasTable, {"ID", "Cliente", "Fecha", "Total", "Medio de pago", "Estado", "Motivo anulacion", "Fecha anulacion"}, dao.listarQt());
+    ventasTable->hideColumn(6);
+    ventasTable->hideColumn(7);
+    updateOperacionButtons(ventasTable, ventasAnularButton);
 }
 
 void MainWindow::loadServicios()
 {
     ServicioDAO dao(conexionBD.getConexionQt());
-    fillTable(serviciosTable, {"ID", "Cliente", "Instrumento", "Descripcion", "Ingreso", "Entrega", "Precio", "Estado"}, dao.listarQt());
+    fillTable(serviciosTable, {"ID", "Cliente", "Instrumento", "Descripcion", "Ingreso", "Entrega", "Precio", "Estado", "Motivo anulacion", "Fecha anulacion"}, dao.listarQt());
+    serviciosTable->hideColumn(8);
+    serviciosTable->hideColumn(9);
+    updateOperacionButtons(serviciosTable, serviciosAnularButton, serviciosEditButton, serviciosEstadoButton);
 }
 
 void MainWindow::loadCompras()
 {
     CompraProveedorDAO dao(conexionBD.getConexionQt());
-    fillTable(comprasTable, {"ID", "Proveedor", "Fecha", "Total"}, dao.listarQt());
+    fillTable(comprasTable, {"ID", "Proveedor", "Fecha", "Total", "Estado", "Motivo anulacion", "Fecha anulacion"}, dao.listarQt());
+    comprasTable->hideColumn(5);
+    comprasTable->hideColumn(6);
+    updateOperacionButtons(comprasTable, comprasAnularButton);
 }
 
 void MainWindow::loadFacturas()
 {
     FacturaDAO dao(conexionBD.getConexionQt());
-    fillTable(facturasTable, {"ID", "Origen", "Referencia", "Numero", "Tipo", "Fecha", "Total"}, dao.listarQt());
+    fillTable(facturasTable, {"ID factura", "Origen", "Operación facturada", "N.º de factura", "Tipo", "Fecha", "Total", "Estado", "Motivo anulacion", "Fecha anulacion"}, dao.listarQt());
+    facturasTable->hideColumn(8);
+    facturasTable->hideColumn(9);
+    updateOperacionButtons(facturasTable, facturasAnularButton);
 }
 
 void MainWindow::loadConfiguracion()

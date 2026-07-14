@@ -9,8 +9,12 @@
 #include <sqlext.h>
 #ifdef MCM_QT_APP
 #include <QSqlDatabase>
+#include <QSqlError>
 #include <QSqlQuery>
+#include <QString>
+#include <QPair>
 #include <QVariant>
+#include <QVector>
 #endif
 
 using namespace std;
@@ -19,11 +23,89 @@ class CompraProveedorDAO {
 public:
 #ifdef MCM_QT_APP
     explicit CompraProveedorDAO(const QSqlDatabase &conexion) : conexionQt(conexion) {}
-    QSqlQuery listarQt() const { QSqlQuery q(conexionQt); q.exec("SELECT cp.id_compra, p.nombre, DATE_FORMAT(cp.fecha, '%d/%m/%Y'), cp.total FROM compras_proveedores cp LEFT JOIN proveedores p ON cp.id_proveedor=p.id_proveedor ORDER BY cp.id_compra DESC"); return q; }
+    QSqlQuery listarQt() const { QSqlQuery q(conexionQt); q.exec("SELECT cp.id_compra, p.nombre, DATE_FORMAT(cp.fecha, '%d/%m/%Y'), cp.total, cp.estado, COALESCE(cp.motivo_anulacion, ''), COALESCE(DATE_FORMAT(cp.fecha_anulacion, '%d/%m/%Y %H:%i'), '') FROM compras_proveedores cp LEFT JOIN proveedores p ON cp.id_proveedor=p.id_proveedor ORDER BY cp.id_compra DESC"); return q; }
     bool agregarQt(CompraProveedor &c) const { QSqlQuery q(conexionQt); q.prepare("INSERT INTO compras_proveedores (id_proveedor, fecha, total) VALUES (?, ?, ?)"); q.addBindValue(c.getIdProveedor()); q.addBindValue(QString::fromStdString(c.getFecha())); q.addBindValue(c.getTotal()); return q.exec(); }
     int obtenerUltimoIdQt() const { QSqlQuery q(conexionQt); return q.exec("SELECT LAST_INSERT_ID()") && q.next() ? q.value(0).toInt() : 0; }
     bool actualizarTotalQt(int id, double total) const { QSqlQuery q(conexionQt); q.prepare("UPDATE compras_proveedores SET total=? WHERE id_compra=?"); q.addBindValue(total); q.addBindValue(id); return q.exec(); }
     bool eliminarQt(int id) const { QSqlQuery q(conexionQt); q.prepare("DELETE FROM compras_proveedores WHERE id_compra=?"); q.addBindValue(id); return q.exec(); }
+    QSqlQuery detalleQt(int id) const { QSqlQuery q(conexionQt); q.prepare("SELECT cp.id_compra, p.nombre, DATE_FORMAT(cp.fecha, '%d/%m/%Y'), cp.total, cp.estado, COALESCE(cp.motivo_anulacion, ''), COALESCE(DATE_FORMAT(cp.fecha_anulacion, '%d/%m/%Y %H:%i'), '') FROM compras_proveedores cp LEFT JOIN proveedores p ON cp.id_proveedor=p.id_proveedor WHERE cp.id_compra=?"); q.addBindValue(id); q.exec(); return q; }
+    QSqlQuery anulacionQt(int id) const { QSqlQuery q(conexionQt); q.prepare("SELECT estado, COALESCE(motivo_anulacion, ''), COALESCE(DATE_FORMAT(fecha_anulacion, '%d/%m/%Y %H:%i'), '') FROM compras_proveedores WHERE id_compra=?"); q.addBindValue(id); q.exec(); return q; }
+    bool estaAnuladaQt(int id) const { QSqlQuery q = anulacionQt(id); return q.next() && q.value(0).toString() == "Anulada"; }
+    bool anularCompraQt(int id, const QString &motivo, QString *error = nullptr) {
+        auto setError = [error](const QString &texto) { if (error) *error = texto; };
+        if (!conexionQt.transaction()) {
+            setError(conexionQt.lastError().text());
+            return false;
+        }
+
+        QSqlQuery estado(conexionQt);
+        estado.prepare("SELECT estado FROM compras_proveedores WHERE id_compra=? FOR UPDATE");
+        estado.addBindValue(id);
+        if (!estado.exec() || !estado.next()) {
+            setError(estado.lastError().isValid() ? estado.lastError().text() : "No se encontro la compra.");
+            conexionQt.rollback();
+            return false;
+        }
+        if (estado.value(0).toString() == "Anulada") {
+            setError("La compra ya esta anulada.");
+            conexionQt.rollback();
+            return false;
+        }
+
+        struct DetalleStock { int idProducto; QString nombre; int cantidad; int stock; };
+        QVector<DetalleStock> detalles;
+        QSqlQuery detalle(conexionQt);
+        detalle.prepare(
+            "SELECT dc.id_producto, p.nombre, dc.cantidad, p.stock "
+            "FROM detalle_compras dc "
+            "INNER JOIN productos p ON dc.id_producto = p.id_producto "
+            "WHERE dc.id_compra=? FOR UPDATE"
+        );
+        detalle.addBindValue(id);
+        if (!detalle.exec()) {
+            setError(detalle.lastError().text());
+            conexionQt.rollback();
+            return false;
+        }
+        while (detalle.next()) {
+            DetalleStock item{detalle.value(0).toInt(), detalle.value(1).toString(), detalle.value(2).toInt(), detalle.value(3).toInt()};
+            if (item.stock < item.cantidad) {
+                setError("No se puede anular: el producto \"" + item.nombre + "\" quedaria con stock negativo.");
+                conexionQt.rollback();
+                return false;
+            }
+            detalles.append(item);
+        }
+
+        for (const DetalleStock &item : detalles) {
+            QSqlQuery stock(conexionQt);
+            stock.prepare("UPDATE productos SET stock = stock - ? WHERE id_producto = ?");
+            stock.addBindValue(item.cantidad);
+            stock.addBindValue(item.idProducto);
+            if (!stock.exec()) {
+                setError(stock.lastError().text());
+                conexionQt.rollback();
+                return false;
+            }
+        }
+
+        QSqlQuery update(conexionQt);
+        update.prepare("UPDATE compras_proveedores SET estado='Anulada', motivo_anulacion=?, fecha_anulacion=NOW() WHERE id_compra=? AND estado <> 'Anulada'");
+        update.addBindValue(motivo);
+        update.addBindValue(id);
+        if (!update.exec() || update.numRowsAffected() == 0) {
+            setError(update.lastError().isValid() ? update.lastError().text() : "No se pudo anular la compra.");
+            conexionQt.rollback();
+            return false;
+        }
+
+        if (!conexionQt.commit()) {
+            setError(conexionQt.lastError().text());
+            conexionQt.rollback();
+            return false;
+        }
+        return true;
+    }
     QSqlQuery ultimosQt(int limite=7) const { QSqlQuery q(conexionQt); q.prepare("SELECT id_compra, id_compra, fecha FROM compras_proveedores ORDER BY fecha DESC, id_compra DESC LIMIT ?"); q.addBindValue(limite); q.exec(); return q; }
 #endif
     bool existe(int id) {

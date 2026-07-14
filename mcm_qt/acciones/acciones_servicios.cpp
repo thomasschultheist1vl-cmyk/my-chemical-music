@@ -82,6 +82,10 @@ void MainWindow::editServicio()
         QMessageBox::information(this, "Modificar servicio", "Selecciona un servicio de la tabla.");
         return;
     }
+    if (selectedRowIsAnulada(serviciosTable)) {
+        QMessageBox::information(this, "Modificar servicio", "No se puede modificar un servicio anulado.");
+        return;
+    }
 
     ServicioDAO dao(conexionBD.getConexionQt());
     QSqlQuery load = dao.buscarQt(id);
@@ -149,6 +153,10 @@ void MainWindow::changeServicioEstado()
         QMessageBox::information(this, "Cambiar estado", "Selecciona un servicio de la tabla.");
         return;
     }
+    if (selectedRowIsAnulada(serviciosTable)) {
+        QMessageBox::information(this, "Cambiar estado", "No se puede cambiar el estado de un servicio anulado.");
+        return;
+    }
 
     QDialog dialog(this);
     dialog.setWindowTitle("Cambiar estado del servicio");
@@ -185,6 +193,41 @@ void MainWindow::changeServicioEstado()
     }
 
     loadServicios();
+}
+
+void MainWindow::anularServicio()
+{
+    if (!conexionBD.estaConectadoQt()) {
+        QMessageBox::warning(this, "Servicios", "No hay conexion con la base de datos.");
+        return;
+    }
+
+    const int id = selectedId(serviciosTable);
+    if (id <= 0) {
+        QMessageBox::information(this, "Anular servicio", "Selecciona un servicio de la tabla.");
+        return;
+    }
+
+    if (selectedRowIsAnulada(serviciosTable)) {
+        QMessageBox::information(this, "Anular servicio", "El servicio seleccionado ya esta anulado.");
+        return;
+    }
+
+    QString motivo;
+    if (!requestAnulacionMotivo("Anular servicio", "Desea anular el servicio N.º " + QString::number(id) + "?\n\nMotivo de anulacion:", motivo)) {
+        return;
+    }
+
+    ServicioDAO dao(conexionBD.getConexionQt());
+    QString error;
+    if (!dao.anularServicioQt(id, motivo, &error)) {
+        QMessageBox::warning(this, "Servicios", "No se pudo anular el servicio:\n" + error);
+        return;
+    }
+
+    QMessageBox::information(this, "Servicios", "Servicio anulado correctamente.");
+    loadServicios();
+    actualizarDashboard();
 }
 
 

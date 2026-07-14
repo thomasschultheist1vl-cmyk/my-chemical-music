@@ -14,6 +14,8 @@ private:
     string fechaEntrega;
     float precio;
     int idEstadoServicio;
+    string motivoAnulacion;
+    string fechaAnulacion;
 
 public:
     Servicio() {}
@@ -27,6 +29,21 @@ public:
         this->fechaEntrega = fechaEntrega;
         this->precio = precio;
         this->idEstadoServicio = idEstadoServicio;
+        this->motivoAnulacion = "";
+        this->fechaAnulacion = "";
+    }
+
+    Servicio(int idServicio, int idCliente, string instrumento, string descripcion, string fechaIngreso, string fechaEntrega, float precio, int idEstadoServicio, string motivoAnulacion, string fechaAnulacion) {
+        this->idServicio = idServicio;
+        this->idCliente = idCliente;
+        this->instrumento = instrumento;
+        this->descripcion = descripcion;
+        this->fechaIngreso = fechaIngreso;
+        this->fechaEntrega = fechaEntrega;
+        this->precio = precio;
+        this->idEstadoServicio = idEstadoServicio;
+        this->motivoAnulacion = motivoAnulacion;
+        this->fechaAnulacion = fechaAnulacion;
     }
 
     int getIdServicio() { return idServicio; }
@@ -37,6 +54,8 @@ public:
     string getFechaEntrega() { return fechaEntrega; }
     float getPrecio() { return precio; }
     int getIdEstadoServicio() { return idEstadoServicio; }
+    string getMotivoAnulacion() { return motivoAnulacion; }
+    string getFechaAnulacion() { return fechaAnulacion; }
 
     void setIdServicio(int idServicio) { this->idServicio = idServicio; }
     void setIdCliente(int idCliente) { this->idCliente = idCliente; }
@@ -46,6 +65,8 @@ public:
     void setFechaEntrega(string fechaEntrega) { this->fechaEntrega = fechaEntrega; }
     void setPrecio(float precio) { this->precio = precio; }
     void setIdEstadoServicio(int idEstadoServicio) { this->idEstadoServicio = idEstadoServicio; }
+    void setMotivoAnulacion(string motivoAnulacion) { this->motivoAnulacion = motivoAnulacion; }
+    void setFechaAnulacion(string fechaAnulacion) { this->fechaAnulacion = fechaAnulacion; }
 };
 
 #endif

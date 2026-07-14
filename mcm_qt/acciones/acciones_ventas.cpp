@@ -134,30 +134,40 @@ void MainWindow::addVenta()
     actualizarDashboard();
 }
 
-void MainWindow::showVentaDetails()
+void MainWindow::anularVenta()
 {
-    const int id = selectedId(ventasTable);
-    if (id <= 0) {
-        QMessageBox::information(this, "Detalles de venta", "Selecciona una venta de la tabla.");
+    if (!conexionBD.estaConectadoQt()) {
+        QMessageBox::warning(this, "Ventas", "No hay conexion con la base de datos.");
         return;
     }
 
-    QDialog dialog(this);
-    dialog.setWindowTitle("Detalles de venta " + QString::number(id));
-    dialog.resize(760, 420);
+    const int id = selectedId(ventasTable);
+    if (id <= 0) {
+        QMessageBox::information(this, "Anular venta", "Selecciona una venta de la tabla.");
+        return;
+    }
 
-    QVBoxLayout *layout = new QVBoxLayout(&dialog);
-    QTableWidget *table = new QTableWidget(&dialog);
-    layout->addWidget(table);
+    if (selectedRowIsAnulada(ventasTable)) {
+        QMessageBox::information(this, "Anular venta", "La venta seleccionada ya esta anulada.");
+        return;
+    }
 
-    DetalleVentaDAO dao(conexionBD.getConexionQt());
-    fillTable(table, {"Producto", "Cantidad", "Precio unitario", "Subtotal"}, dao.listarPorVentaQt(id));
+    QString motivo;
+    if (!requestAnulacionMotivo("Anular venta", "Desea anular la venta N.º " + QString::number(id) + "?\n\nMotivo de anulacion:", motivo)) {
+        return;
+    }
 
-    QDialogButtonBox *buttons = new QDialogButtonBox(QDialogButtonBox::Close, &dialog);
-    buttons->button(QDialogButtonBox::Close)->setText("Cerrar");
-    layout->addWidget(buttons);
-    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
-    dialog.exec();
+    VentaDAO dao(conexionBD.getConexionQt());
+    QString error;
+    if (!dao.anularVentaQt(id, motivo, &error)) {
+        QMessageBox::warning(this, "Ventas", "No se pudo anular la venta:\n" + error);
+        return;
+    }
+
+    QMessageBox::information(this, "Ventas", "Venta anulada correctamente.");
+    loadVentas();
+    loadProductos();
+    actualizarDashboard();
 }
 
 

@@ -83,6 +83,12 @@ MainWindow::MainWindow(QWidget *parent)
     , productosCountLabel(nullptr)
     , ventasCountLabel(nullptr)
     , serviciosCountLabel(nullptr)
+    , ventasAnularButton(nullptr)
+    , serviciosEditButton(nullptr)
+    , serviciosEstadoButton(nullptr)
+    , serviciosAnularButton(nullptr)
+    , comprasAnularButton(nullptr)
+    , facturasAnularButton(nullptr)
     , dashboardSequence(0)
 {
     // Qt carga primero la ventana base del archivo .ui. Después buildInterface()
@@ -323,13 +329,13 @@ void MainWindow::buildInterface()
     // Índice 2: Productos. createDataPage crea su buscador, botones y tabla.
     pages->addWidget(createDataPage(&productosTable, {"ID", "Nombre", "Descripcion", "Precio", "Stock", "Minimo", "Categoria", "Marca", "Proveedor"}, "productos"));
     // Índice 3: Ventas.
-    pages->addWidget(createDataPage(&ventasTable, {"ID", "Cliente", "Fecha", "Total", "Medio de pago"}, "ventas"));
+    pages->addWidget(createDataPage(&ventasTable, {"ID", "Cliente", "Fecha", "Total", "Medio de pago", "Estado", "Motivo anulacion", "Fecha anulacion"}, "ventas"));
     // Índice 4: Servicios.
-    pages->addWidget(createDataPage(&serviciosTable, {"ID", "Cliente", "Instrumento", "Descripcion", "Ingreso", "Entrega", "Precio", "Estado"}, "servicios"));
+    pages->addWidget(createDataPage(&serviciosTable, {"ID", "Cliente", "Instrumento", "Descripcion", "Ingreso", "Entrega", "Precio", "Estado", "Motivo anulacion", "Fecha anulacion"}, "servicios"));
     // Índice 5: Compras.
-    pages->addWidget(createDataPage(&comprasTable, {"ID", "Proveedor", "Fecha", "Total"}, "compras"));
+    pages->addWidget(createDataPage(&comprasTable, {"ID", "Proveedor", "Fecha", "Total", "Estado", "Motivo anulacion", "Fecha anulacion"}, "compras"));
     // Índice 6: Facturación.
-    pages->addWidget(createDataPage(&facturasTable, {"ID", "Origen", "Referencia", "Numero", "Tipo", "Fecha", "Total"}, "facturas"));
+    pages->addWidget(createDataPage(&facturasTable, {"ID factura", "Origen", "Operación facturada", "N.º de factura", "Tipo", "Fecha", "Total", "Estado", "Motivo anulacion", "Fecha anulacion"}, "facturas"));
     // Índice 7: Datos generales.
     pages->addWidget(createConfiguracionPage());
 
@@ -535,9 +541,12 @@ QWidget *MainWindow::createClientesPage()
     btnEdit->setObjectName("secondaryButton");
     QPushButton *btnDelete = new QPushButton("Eliminar", page);
     btnDelete->setObjectName("secondaryButton");
+    QPushButton *btnDetails = new QPushButton("Ver detalles", page);
+    btnDetails->setObjectName("secondaryButton");
 
     toolbar->addWidget(search, 1);
     toolbar->addWidget(btnRefresh);
+    toolbar->addWidget(btnDetails);
     toolbar->addWidget(btnAdd);
     toolbar->addWidget(btnEdit);
     toolbar->addWidget(btnDelete);
@@ -556,9 +565,13 @@ QWidget *MainWindow::createClientesPage()
     layout->addWidget(clientesTable);
 
     connect(btnRefresh, &QPushButton::clicked, this, &MainWindow::loadClientes);
+    connect(btnDetails, &QPushButton::clicked, this, &MainWindow::showClienteDetails);
     connect(btnAdd, &QPushButton::clicked, this, &MainWindow::addCliente);
     connect(btnEdit, &QPushButton::clicked, this, &MainWindow::editCliente);
     connect(btnDelete, &QPushButton::clicked, this, &MainWindow::deleteCliente);
+    connect(clientesTable, &QTableWidget::cellDoubleClicked, this, [this](int, int) {
+        showClienteDetails();
+    });
     // El buscador oculta visualmente las filas que no contienen el texto escrito.
     connect(search, &QLineEdit::textChanged, this, [this](const QString &text) {
         for (int row = 0; row < clientesTable->rowCount(); ++row) {
@@ -596,13 +609,19 @@ QWidget *MainWindow::createDataPage(QTableWidget **table, const QStringList &hea
     btnEdit->setObjectName("secondaryButton");
     QPushButton *btnDelete = new QPushButton("Eliminar", page);
     btnDelete->setObjectName("secondaryButton");
+    QPushButton *btnAnular = new QPushButton("Anular", page);
+    btnAnular->setObjectName("secondaryButton");
+    QPushButton *btnDetails = new QPushButton("Ver detalles", page);
+    btnDetails->setObjectName("secondaryButton");
     QPushButton *btnExtra = new QPushButton("Detalles", page);
     btnExtra->setObjectName("secondaryButton");
 
     toolbar->addWidget(search, 1);
     toolbar->addWidget(btnRefresh);
+    toolbar->addWidget(btnDetails);
     toolbar->addWidget(btnAdd);
     toolbar->addWidget(btnEdit);
+    toolbar->addWidget(btnAnular);
     toolbar->addWidget(btnDelete);
     toolbar->addWidget(btnExtra);
 
@@ -611,19 +630,30 @@ QWidget *MainWindow::createDataPage(QTableWidget **table, const QStringList &hea
         btnAdd->setText("Registrar venta");
         btnEdit->hide();
         btnDelete->hide();
-        btnExtra->setText("Detalles");
+        btnAnular->setText("Anular venta");
+        ventasAnularButton = btnAnular;
+        btnExtra->hide();
     } else if (module == "servicios") {
         btnAdd->setText("Registrar servicio");
+        btnAnular->setText("Anular servicio");
+        serviciosEditButton = btnEdit;
+        serviciosAnularButton = btnAnular;
+        serviciosEstadoButton = btnExtra;
         btnExtra->setText("Cambiar estado");
     } else if (module == "compras") {
         btnAdd->setText("Registrar compra");
         btnEdit->hide();
-        btnExtra->setText("Detalles");
+        btnAnular->setText("Anular compra");
+        comprasAnularButton = btnAnular;
+        btnExtra->hide();
     } else if (module == "facturas") {
         btnAdd->setText("Generar factura");
         btnEdit->hide();
+        btnAnular->setText("Anular factura");
+        facturasAnularButton = btnAnular;
         btnExtra->hide();
     } else {
+        btnAnular->hide();
         btnExtra->hide();
     }
 
@@ -687,11 +717,42 @@ QWidget *MainWindow::createDataPage(QTableWidget **table, const QStringList &hea
         else if (module == "facturas") deleteFactura();
     });
 
-    connect(btnExtra, &QPushButton::clicked, this, [this, module]() {
-        if (module == "ventas") showVentaDetails();
-        else if (module == "servicios") changeServicioEstado();
-        else if (module == "compras") showCompraDetails();
+    connect(btnAnular, &QPushButton::clicked, this, [this, module]() {
+        if (module == "ventas") anularVenta();
+        else if (module == "servicios") anularServicio();
+        else if (module == "compras") anularCompra();
+        else if (module == "facturas") anularFactura();
     });
+
+    connect(btnDetails, &QPushButton::clicked, this, [this, module]() {
+        if (module == "productos") showProductoDetails();
+        else if (module == "ventas") showVentaDetails();
+        else if (module == "servicios") showServicioDetails();
+        else if (module == "compras") showCompraDetails();
+        else if (module == "facturas") showFacturaDetails();
+    });
+
+    connect(btnExtra, &QPushButton::clicked, this, [this, module]() {
+        if (module == "servicios") changeServicioEstado();
+    });
+
+    connect(currentTable, &QTableWidget::cellDoubleClicked, this, [this, module](int, int) {
+        if (module == "productos") showProductoDetails();
+        else if (module == "ventas") showVentaDetails();
+        else if (module == "servicios") showServicioDetails();
+        else if (module == "compras") showCompraDetails();
+        else if (module == "facturas") showFacturaDetails();
+    });
+
+    if (module == "ventas" || module == "servicios" || module == "compras" || module == "facturas") {
+        connect(currentTable, &QTableWidget::itemSelectionChanged, this, [this, currentTable, module]() {
+            if (module == "ventas") updateOperacionButtons(currentTable, ventasAnularButton);
+            else if (module == "servicios") updateOperacionButtons(currentTable, serviciosAnularButton, serviciosEditButton, serviciosEstadoButton);
+            else if (module == "compras") updateOperacionButtons(currentTable, comprasAnularButton);
+            else if (module == "facturas") updateOperacionButtons(currentTable, facturasAnularButton);
+        });
+        updateOperacionButtons(currentTable, btnAnular, module == "servicios" ? btnEdit : nullptr, module == "servicios" ? btnExtra : nullptr);
+    }
 
     return page;
 }
@@ -714,6 +775,8 @@ QWidget *MainWindow::createConfiguracionPage()
     btnEdit->setObjectName("secondaryButton");
     QPushButton *btnDelete = new QPushButton("Eliminar", page);
     btnDelete->setObjectName("secondaryButton");
+    QPushButton *btnDetails = new QPushButton("Ver detalles", page);
+    btnDetails->setObjectName("secondaryButton");
 
     // Cada pestaña recibe su propia tabla, columnas y buscador.
     configTabs = new QTabWidget(page);
@@ -732,7 +795,7 @@ QWidget *MainWindow::createConfiguracionPage()
     toolbar->setContentsMargins(6, 0, 6, 0);
     toolbar->setSpacing(6);
 
-    for (QPushButton *button : {btnRefresh, btnAdd, btnEdit, btnDelete}) {
+    for (QPushButton *button : {btnRefresh, btnDetails, btnAdd, btnEdit, btnDelete}) {
         button->setFixedHeight(36);
         button->setMinimumWidth(78);
         toolbar->addWidget(button);
@@ -743,12 +806,17 @@ QWidget *MainWindow::createConfiguracionPage()
     layout->addWidget(configTabs);
 
     connect(btnRefresh, &QPushButton::clicked, this, &MainWindow::refreshConfigTab);
+    connect(btnDetails, &QPushButton::clicked, this, &MainWindow::showConfigDetails);
     connect(btnAdd, &QPushButton::clicked, this, &MainWindow::addConfigItem);
     connect(btnEdit, &QPushButton::clicked, this, &MainWindow::editConfigItem);
     connect(btnDelete, &QPushButton::clicked, this, &MainWindow::deleteConfigItem);
     connect(configTabs, &QTabWidget::currentChanged, this, [this]() {
         refreshConfigTab();
     });
+    connect(categoriasTable, &QTableWidget::cellDoubleClicked, this, [this](int, int) { showConfigDetails(); });
+    connect(marcasTable, &QTableWidget::cellDoubleClicked, this, [this](int, int) { showConfigDetails(); });
+    connect(mediosPagoTable, &QTableWidget::cellDoubleClicked, this, [this](int, int) { showConfigDetails(); });
+    connect(estadosServicioTable, &QTableWidget::cellDoubleClicked, this, [this](int, int) { showConfigDetails(); });
 
     return page;
 }

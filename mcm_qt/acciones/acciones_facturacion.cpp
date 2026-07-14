@@ -96,5 +96,40 @@ void MainWindow::deleteFactura()
     loadFacturas();
 }
 
+void MainWindow::anularFactura()
+{
+    if (!conexionBD.estaConectadoQt()) {
+        QMessageBox::warning(this, "Facturacion", "No hay conexion con la base de datos.");
+        return;
+    }
+
+    const int id = selectedId(facturasTable);
+    if (id <= 0) {
+        QMessageBox::information(this, "Anular factura", "Selecciona una factura de la tabla.");
+        return;
+    }
+
+    if (selectedRowIsAnulada(facturasTable)) {
+        QMessageBox::information(this, "Anular factura", "La factura seleccionada ya esta anulada.");
+        return;
+    }
+
+    QString motivo;
+    if (!requestAnulacionMotivo("Anular factura", "Desea anular la factura N.º " + QString::number(id) + "?\n\nMotivo de anulacion:", motivo)) {
+        return;
+    }
+
+    FacturaDAO dao(conexionBD.getConexionQt());
+    QString error;
+    if (!dao.anularFacturaQt(id, motivo, &error)) {
+        QMessageBox::warning(this, "Facturacion", "No se pudo anular la factura:\n" + error);
+        return;
+    }
+
+    QMessageBox::information(this, "Facturacion", "Factura anulada correctamente.");
+    loadFacturas();
+    actualizarDashboard();
+}
+
 
 

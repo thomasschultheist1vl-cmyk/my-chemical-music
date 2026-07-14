@@ -21,6 +21,7 @@ public:
     explicit MarcaDAO(const QSqlDatabase &db) : conexionQt(db) {}
     QSqlQuery listarQt() const { QSqlQuery q(conexionQt); q.exec("SELECT id_marca, nombre FROM marcas ORDER BY id_marca"); return q; }
     QSqlQuery paraComboQt() const { QSqlQuery q(conexionQt); q.exec("SELECT id_marca, nombre FROM marcas ORDER BY nombre"); return q; }
+    QSqlQuery detalleQt(int id) const { QSqlQuery q(conexionQt); q.prepare("SELECT id_marca, nombre FROM marcas WHERE id_marca=?"); q.addBindValue(id); q.exec(); return q; }
     bool agregarQt(Marca &m) const { QSqlQuery q(conexionQt); q.prepare("INSERT INTO marcas (nombre) VALUES (?)"); q.addBindValue(QString::fromStdString(m.getNombre())); return q.exec(); }
     bool modificarQt(Marca &m) const { QSqlQuery q(conexionQt); q.prepare("UPDATE marcas SET nombre=? WHERE id_marca=?"); q.addBindValue(QString::fromStdString(m.getNombre())); q.addBindValue(m.getIdMarca()); return q.exec(); }
     bool eliminarQt(int id) const { QSqlQuery q(conexionQt); q.prepare("DELETE FROM marcas WHERE id_marca=?"); q.addBindValue(id); return q.exec(); }
