@@ -4,3 +4,4 @@ build-*/
 *.user
 .qtc_clangd/
 .qtcreator/
+MCM_EXE/conexion.ini

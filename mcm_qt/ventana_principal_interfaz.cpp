@@ -32,6 +32,8 @@
 #include <algorithm>
 
 namespace {
+// Funciones auxiliares usadas por la interfaz para mostrar y convertir fechas.
+// No consultan la base de datos: solamente adaptan el texto que ve el usuario.
 QDate leerFecha(const QString &text)
 {
     QDate fecha = QDate::fromString(text.trimmed(), "dd/MM/yyyy");
@@ -83,6 +85,8 @@ MainWindow::MainWindow(QWidget *parent)
     , serviciosCountLabel(nullptr)
     , dashboardSequence(0)
 {
+    // Qt carga primero la ventana base del archivo .ui. Después buildInterface()
+    // construye por código el menú lateral y cada apartado de la aplicación.
     ui->setupUi(this);
     buildInterface();
     connectDatabase();
@@ -97,6 +101,8 @@ MainWindow::~MainWindow()
 
 void MainWindow::buildInterface()
 {
+    // ESTRUCTURA Y ESTILO GENERAL DE TODA LA APLICACIÓN QT.
+    // Aquí se definen colores, tablas, botones, campos y demás estilos compartidos.
     setWindowTitle("My Chemical Music");
     resize(1180, 720);
 
@@ -242,11 +248,13 @@ void MainWindow::buildInterface()
         }
     )");
 
+    // Contenedor principal: menú lateral a la izquierda y contenido a la derecha.
     QWidget *root = new QWidget(this);
     QHBoxLayout *rootLayout = new QHBoxLayout(root);
     rootLayout->setContentsMargins(0, 0, 0, 0);
     rootLayout->setSpacing(0);
 
+    // MENÚ LATERAL: crea los botones que permiten cambiar de apartado.
     QFrame *sidebar = new QFrame(root);
     sidebar->setObjectName("sidebar");
     sidebar->setFixedWidth(270);
@@ -287,6 +295,7 @@ void MainWindow::buildInterface()
     sidebarLayout->addWidget(btnConfig);
     sidebarLayout->addStretch();
 
+    // ÁREA DERECHA: contiene el título, el estado de conexión y las pantallas.
     QWidget *content = new QWidget(root);
     QVBoxLayout *contentLayout = new QVBoxLayout(content);
     contentLayout->setContentsMargins(28, 24, 28, 24);
@@ -303,14 +312,25 @@ void MainWindow::buildInterface()
     headerLayout->addStretch();
     headerLayout->addWidget(connectionLabel);
 
+    // PANTALLAS DE LA APLICACIÓN.
+    // QStackedWidget guarda todos los apartados y muestra uno por vez.
+    // El índice indicado aquí es el mismo que se usa más abajo al navegar.
     pages = new QStackedWidget(content);
+    // Índice 0: Inicio.
     pages->addWidget(createDashboardPage());
+    // Índice 1: Clientes.
     pages->addWidget(createClientesPage());
+    // Índice 2: Productos. createDataPage crea su buscador, botones y tabla.
     pages->addWidget(createDataPage(&productosTable, {"ID", "Nombre", "Descripcion", "Precio", "Stock", "Minimo", "Categoria", "Marca", "Proveedor"}, "productos"));
+    // Índice 3: Ventas.
     pages->addWidget(createDataPage(&ventasTable, {"ID", "Cliente", "Fecha", "Total", "Medio de pago"}, "ventas"));
+    // Índice 4: Servicios.
     pages->addWidget(createDataPage(&serviciosTable, {"ID", "Cliente", "Instrumento", "Descripcion", "Ingreso", "Entrega", "Precio", "Estado"}, "servicios"));
+    // Índice 5: Compras.
     pages->addWidget(createDataPage(&comprasTable, {"ID", "Proveedor", "Fecha", "Total"}, "compras"));
+    // Índice 6: Facturación.
     pages->addWidget(createDataPage(&facturasTable, {"ID", "Origen", "Referencia", "Numero", "Tipo", "Fecha", "Total"}, "facturas"));
+    // Índice 7: Datos generales.
     pages->addWidget(createConfiguracionPage());
 
     contentLayout->addLayout(headerLayout);
@@ -322,6 +342,8 @@ void MainWindow::buildInterface()
     setCentralWidget(root);
     marcarSeccionActiva(btnInicio);
 
+    // NAVEGACIÓN: cada botón cambia la pantalla visible, marca la opción activa
+    // y vuelve a cargar los datos correspondientes desde los DAO.
     connect(btnInicio, &QPushButton::clicked, this, [this, btnInicio]() {
         sectionTitle->setText("Inicio");
         pages->setCurrentIndex(0);
@@ -372,6 +394,11 @@ void MainWindow::buildInterface()
     });
 }
 
+// ============================== INICIO ==============================
+// Construye solamente la parte visual del apartado Inicio:
+// tarjetas de resumen, últimos movimientos y productos bajos en stock.
+// Los valores reales se cargan desde actualizarDashboard(), ubicada en el
+// archivo de datos de la ventana principal.
 QWidget *MainWindow::createDashboardPage()
 {
     QWidget *page = new QWidget;
@@ -387,6 +414,7 @@ QWidget *MainWindow::createDashboardPage()
 
     const QString cardStyle = "QFrame#card { padding: 10px; }";
 
+    // Función local reutilizada para crear las cuatro tarjetas con el mismo estilo.
     auto makeCard = [&](const QString &title, QLabel **valueLabelPointer) {
         QFrame *card = new QFrame(page);
         card->setObjectName("card");
@@ -410,6 +438,7 @@ QWidget *MainWindow::createDashboardPage()
     cards->addWidget(makeCard("Ventas registradas", &ventasCountLabel), 0, 2);
     cards->addWidget(makeCard("Servicios registrados", &serviciosCountLabel), 0, 3);
 
+    // Cuadro izquierdo del Inicio: tabla de los últimos siete movimientos.
     QFrame *movimientosPanel = new QFrame(page);
     movimientosPanel->setObjectName("dashboardPanel");
     movimientosPanel->setStyleSheet(
@@ -441,6 +470,7 @@ QWidget *MainWindow::createDashboardPage()
     movimientosLayout->addWidget(movimientosTitle);
     movimientosLayout->addWidget(movimientosTable);
 
+    // Cuadro derecho del Inicio: lista de productos con stock menor o igual a 3.
     QFrame *stockPanel = new QFrame(page);
     stockPanel->setObjectName("dashboardPanel");
     stockPanel->setStyleSheet(
@@ -468,6 +498,7 @@ QWidget *MainWindow::createDashboardPage()
     movimientosPanel->setFixedHeight(panelHeight);
     stockPanel->setFixedHeight(panelHeight);
 
+    // Distribuye los dos cuadros inferiores con el mismo ancho.
     QHBoxLayout *dashboardPanels = new QHBoxLayout;
     dashboardPanels->setContentsMargins(0, 0, 0, 0);
     dashboardPanels->setSpacing(12);
@@ -481,6 +512,10 @@ QWidget *MainWindow::createDashboardPage()
     return page;
 }
 
+// ============================= CLIENTES =============================
+// Construye el buscador, los botones y la tabla del apartado Clientes.
+// Las operaciones de los botones están implementadas en acciones_clientes.cpp.
+// La carga de filas se realiza mediante loadClientes() en el archivo de datos.
 QWidget *MainWindow::createClientesPage()
 {
     QWidget *page = new QWidget;
@@ -524,6 +559,7 @@ QWidget *MainWindow::createClientesPage()
     connect(btnAdd, &QPushButton::clicked, this, &MainWindow::addCliente);
     connect(btnEdit, &QPushButton::clicked, this, &MainWindow::editCliente);
     connect(btnDelete, &QPushButton::clicked, this, &MainWindow::deleteCliente);
+    // El buscador oculta visualmente las filas que no contienen el texto escrito.
     connect(search, &QLineEdit::textChanged, this, [this](const QString &text) {
         for (int row = 0; row < clientesTable->rowCount(); ++row) {
             bool match = text.trimmed().isEmpty();
@@ -538,6 +574,9 @@ QWidget *MainWindow::createClientesPage()
     return page;
 }
 
+// ===== PRODUCTOS, VENTAS, SERVICIOS, COMPRAS Y FACTURACIÓN =====
+// Función visual reutilizable para esos cinco apartados
+// De esta forma no se repite la misma estructura gráfica en cinco funciones.
 QWidget *MainWindow::createDataPage(QTableWidget **table, const QStringList &headers, const QString &module)
 {
     QWidget *page = new QWidget;
@@ -567,6 +606,7 @@ QWidget *MainWindow::createDataPage(QTableWidget **table, const QStringList &hea
     toolbar->addWidget(btnDelete);
     toolbar->addWidget(btnExtra);
 
+    // Adapta los botones visibles y sus textos según el apartado actual.
     if (module == "ventas") {
         btnAdd->setText("Registrar venta");
         btnEdit->hide();
@@ -601,6 +641,7 @@ QWidget *MainWindow::createDataPage(QTableWidget **table, const QStringList &hea
     layout->addWidget(*table);
 
     QTableWidget *currentTable = *table;
+    // Buscador compartido: filtra las filas que ya se encuentran en la tabla.
     connect(search, &QLineEdit::textChanged, this, [currentTable](const QString &text) {
         for (int row = 0; row < currentTable->rowCount(); ++row) {
             bool match = text.trimmed().isEmpty();
@@ -612,6 +653,7 @@ QWidget *MainWindow::createDataPage(QTableWidget **table, const QStringList &hea
         }
     });
 
+    // Actualiza la tabla correcta según el apartado que está visible.
     connect(btnRefresh, &QPushButton::clicked, this, [this]() {
         switch (pages->currentIndex()) {
             case 2: loadProductos(); break;
@@ -624,6 +666,7 @@ QWidget *MainWindow::createDataPage(QTableWidget **table, const QStringList &hea
         }
     });
 
+    // Relaciona los botones gráficos con la función de acciones correspondiente.
     connect(btnAdd, &QPushButton::clicked, this, [this, module]() {
         if (module == "productos") addProducto();
         else if (module == "ventas") addVenta();
@@ -653,6 +696,9 @@ QWidget *MainWindow::createDataPage(QTableWidget **table, const QStringList &hea
     return page;
 }
 
+// ========================= DATOS GENERALES ==========================
+// Construye el apartado que agrupa Categorías, Marcas, Medios de pago
+// y Estados de servicio. Las cuatro opciones se organizan en pestañas.
 QWidget *MainWindow::createConfiguracionPage()
 {
     QWidget *page = new QWidget;
@@ -669,6 +715,7 @@ QWidget *MainWindow::createConfiguracionPage()
     QPushButton *btnDelete = new QPushButton("Eliminar", page);
     btnDelete->setObjectName("secondaryButton");
 
+    // Cada pestaña recibe su propia tabla, columnas y buscador.
     configTabs = new QTabWidget(page);
     configTabs->addTab(createConfigTab(&categoriasTable, {"ID", "Nombre", "Descripcion"}, true), "Categorias");
     configTabs->addTab(createConfigTab(&marcasTable, {"ID", "Nombre"}, false), "Marcas");
@@ -679,6 +726,7 @@ QWidget *MainWindow::createConfiguracionPage()
         "QTabBar::tab { min-width: 82px; padding: 9px 10px; }"
     );
 
+    // Botones compartidos ubicados a la derecha de la barra de pestañas.
     QWidget *actions = new QWidget(configTabs);
     QHBoxLayout *toolbar = new QHBoxLayout(actions);
     toolbar->setContentsMargins(6, 0, 6, 0);
@@ -705,6 +753,8 @@ QWidget *MainWindow::createConfiguracionPage()
     return page;
 }
 
+// Crea el contenido gráfico reutilizable de cada pestaña de Datos generales:
+// un campo de búsqueda y una tabla con las columnas recibidas.
 QWidget *MainWindow::createConfigTab(QTableWidget **table, const QStringList &headers, bool hasDescription)
 {
     QWidget *page = new QWidget;
@@ -748,6 +798,7 @@ QWidget *MainWindow::createConfigTab(QTableWidget **table, const QStringList &he
     return page;
 }
 
+// Crea un botón del menú lateral con las mismas propiedades visuales.
 QPushButton *MainWindow::createMenuButton(const QString &text)
 {
     QPushButton *button = new QPushButton(text);
@@ -758,6 +809,7 @@ QPushButton *MainWindow::createMenuButton(const QString &text)
     return button;
 }
 
+// Deja activo solamente el botón del apartado visible y actualiza su estilo.
 void MainWindow::marcarSeccionActiva(QPushButton *activeButton)
 {
     for (QPushButton *button : menuButtons) {

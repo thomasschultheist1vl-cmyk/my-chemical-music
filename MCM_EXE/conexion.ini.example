@@ -1,0 +1,7 @@
+[mysql]
+driver=MySQL ODBC 9.7 Unicode Driver
+host=servidor.mysql.com
+puerto=3306
+base=nombre_base
+usuario=nombre_usuario
+clave=contraseña

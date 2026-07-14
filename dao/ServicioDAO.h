@@ -26,6 +26,34 @@ public:
     bool eliminarQt(int id) const { QSqlQuery q(conexionQt); q.prepare("DELETE FROM servicios WHERE id_servicio=?"); q.addBindValue(id); return q.exec(); }
     bool cambiarEstadoQt(int id, int estado) const { QSqlQuery q(conexionQt); q.prepare("UPDATE servicios SET id_estado_servicio=? WHERE id_servicio=?"); q.addBindValue(estado); q.addBindValue(id); return q.exec(); }
     QSqlQuery paraComboQt() const { QSqlQuery q(conexionQt); q.exec("SELECT id_servicio, CONCAT('Servicio ', id_servicio, ' - ', instrumento, ' - $', precio) FROM servicios ORDER BY id_servicio DESC"); return q; }
+    QSqlQuery disponiblesParaFacturarQt() const {
+        QSqlQuery q(conexionQt);
+        q.exec(
+            "SELECT s.id_servicio, CONCAT(c.nombre, ' ', c.apellido), "
+            "s.instrumento, s.descripcion, s.precio "
+            "FROM servicios s "
+            "LEFT JOIN clientes c ON s.id_cliente = c.id_cliente "
+            "LEFT JOIN facturas f ON s.id_servicio = f.id_servicio "
+            "WHERE f.id_factura IS NULL "
+            "ORDER BY s.id_servicio DESC"
+        );
+        return q;
+    }
+    QSqlQuery detalleParaFacturaQt(int id) const {
+        QSqlQuery q(conexionQt);
+        q.prepare(
+            "SELECT CONCAT(c.nombre, ' ', c.apellido), s.instrumento, s.descripcion, "
+            "DATE_FORMAT(s.fecha_ingreso, '%d/%m/%Y'), "
+            "DATE_FORMAT(s.fecha_entrega, '%d/%m/%Y'), es.nombre, s.precio "
+            "FROM servicios s "
+            "LEFT JOIN clientes c ON s.id_cliente = c.id_cliente "
+            "LEFT JOIN estados_servicio es ON s.id_estado_servicio = es.id_estado_servicio "
+            "WHERE s.id_servicio = ?"
+        );
+        q.addBindValue(id);
+        q.exec();
+        return q;
+    }
     QSqlQuery precioQt(int id) const { QSqlQuery q(conexionQt); q.prepare("SELECT precio FROM servicios WHERE id_servicio=?"); q.addBindValue(id); q.exec(); return q; }
     QSqlQuery contarQt() const { QSqlQuery q(conexionQt); q.exec("SELECT COUNT(*) FROM servicios"); return q; }
     QSqlQuery ultimosQt(int limite=7) const { QSqlQuery q(conexionQt); q.prepare("SELECT id_servicio, id_servicio, fecha_ingreso FROM servicios ORDER BY fecha_ingreso DESC, id_servicio DESC LIMIT ?"); q.addBindValue(limite); q.exec(); return q; }

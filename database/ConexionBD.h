@@ -7,6 +7,9 @@
 #ifdef MCM_QT_APP
 #include <QSqlDatabase>
 #include <QSqlError>
+#include <QCoreApplication>
+#include <QFileInfo>
+#include <QSettings>
 #include <QString>
 #endif
 
@@ -60,6 +63,25 @@ public:
             conexionQt = QSqlDatabase::database(nombre);
         } else {
             conexionQt = QSqlDatabase::addDatabase("QODBC", nombre);
+        }
+
+        const QString archivoConfig = QCoreApplication::applicationDirPath() + "/conexion.ini";
+        if (QFileInfo::exists(archivoConfig)) {
+            QSettings config(archivoConfig, QSettings::IniFormat);
+            const QString driver = config.value("mysql/driver", "MySQL ODBC 9.7 Unicode Driver").toString();
+            const QString host = config.value("mysql/host").toString();
+            const QString puerto = config.value("mysql/puerto", "3306").toString();
+            const QString base = config.value("mysql/base").toString();
+            const QString usuario = config.value("mysql/usuario").toString();
+            const QString clave = config.value("mysql/clave").toString();
+            conexionQt.setDatabaseName(
+                "DRIVER={" + driver + "};SERVER=" + host + ";PORT=" + puerto
+                + ";DATABASE=" + base + ";UID=" + usuario + ";PWD=" + clave + ";"
+            );
+            conexionQt.setUserName("");
+            conexionQt.setPassword("");
+        } else {
+            // Respaldo local anterior: DSN de 64 bits, root y clave vacia.
             conexionQt.setDatabaseName("my_chemical_music64");
             conexionQt.setUserName("root");
             conexionQt.setPassword("");

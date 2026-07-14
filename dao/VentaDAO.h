@@ -24,6 +24,25 @@ public:
     int obtenerUltimoIdQt() const { QSqlQuery q(conexionQt); return q.exec("SELECT LAST_INSERT_ID()") && q.next() ? q.value(0).toInt() : 0; }
     bool actualizarTotalQt(int id, double total) const { QSqlQuery q(conexionQt); q.prepare("UPDATE ventas SET total=? WHERE id_venta=?"); q.addBindValue(total); q.addBindValue(id); return q.exec(); }
     QSqlQuery paraComboQt() const { QSqlQuery q(conexionQt); q.exec("SELECT id_venta, CONCAT('Venta ', id_venta, ' - $', total) FROM ventas ORDER BY id_venta DESC"); return q; }
+    QSqlQuery disponiblesParaFacturarQt() const {
+        QSqlQuery q(conexionQt);
+        q.exec(
+            "SELECT v.id_venta, CONCAT(c.nombre, ' ', c.apellido), "
+            "COUNT(dv.id_detalle_venta), "
+            "CASE WHEN COUNT(dv.id_detalle_venta) = 1 THEN MAX(p.nombre) ELSE '' END, "
+            "CASE WHEN COUNT(dv.id_detalle_venta) = 1 THEN MAX(dv.cantidad) ELSE 0 END, "
+            "v.total "
+            "FROM ventas v "
+            "LEFT JOIN clientes c ON v.id_cliente = c.id_cliente "
+            "LEFT JOIN detalle_ventas dv ON v.id_venta = dv.id_venta "
+            "LEFT JOIN productos p ON dv.id_producto = p.id_producto "
+            "LEFT JOIN facturas f ON v.id_venta = f.id_venta "
+            "WHERE f.id_factura IS NULL "
+            "GROUP BY v.id_venta, c.nombre, c.apellido, v.total "
+            "ORDER BY v.id_venta DESC"
+        );
+        return q;
+    }
     QSqlQuery totalQt(int id) const { QSqlQuery q(conexionQt); q.prepare("SELECT total FROM ventas WHERE id_venta=?"); q.addBindValue(id); q.exec(); return q; }
     QSqlQuery contarQt() const { QSqlQuery q(conexionQt); q.exec("SELECT COUNT(*) FROM ventas"); return q; }
     QSqlQuery ultimosQt(int limite=7) const { QSqlQuery q(conexionQt); q.prepare("SELECT id_venta, id_venta, fecha FROM ventas ORDER BY fecha DESC, id_venta DESC LIMIT ?"); q.addBindValue(limite); q.exec(); return q; }
