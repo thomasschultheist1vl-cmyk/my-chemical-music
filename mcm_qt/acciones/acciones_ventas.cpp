@@ -67,7 +67,7 @@ void MainWindow::addVenta()
     DetalleVentaDAO detalleDao(conexionBD.getConexionQt());
     ProductoDAO productoDao(conexionBD.getConexionQt());
     Venta ventaModelo(0, idCliente, fecha.toStdString(), 0, idMedioPago);
-    if (!ventaDao.agregarQt(ventaModelo)) {
+    if (!ventaDao.agregarQt(ventaModelo, usuarioActual.idUsuario)) {
         conexionBD.cancelarTransaccionQt();
         QMessageBox::warning(this, "Ventas", "No se pudo registrar la venta.");
         return;
@@ -151,6 +151,10 @@ void MainWindow::anularVenta()
         QMessageBox::information(this, "Anular venta", "La venta seleccionada ya esta anulada.");
         return;
     }
+    if (usuarioActual.esVendedor() && !VentaDAO(conexionBD.getConexionQt()).perteneceAUsuarioOSupervisorQt(id, usuarioActual.idUsuario)) {
+        QMessageBox::warning(this, "Ventas", "No podes anular una venta de otro usuario.");
+        return;
+    }
 
     QString motivo;
     if (!requestAnulacionMotivo("Anular venta", "Desea anular la venta N.º " + QString::number(id) + "?\n\nMotivo de anulacion:", motivo)) {
@@ -159,7 +163,7 @@ void MainWindow::anularVenta()
 
     VentaDAO dao(conexionBD.getConexionQt());
     QString error;
-    if (!dao.anularVentaQt(id, motivo, &error)) {
+    if (!dao.anularVentaQt(id, motivo, usuarioActual.idUsuario, &error)) {
         QMessageBox::warning(this, "Ventas", "No se pudo anular la venta:\n" + error);
         return;
     }

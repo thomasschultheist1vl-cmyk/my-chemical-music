@@ -9,6 +9,7 @@
 #include "../dao/MedioPagoDAO.h"
 #include "../dao/ProductoDAO.h"
 #include "../dao/ServicioDAO.h"
+#include "../dao/UsuarioDAO.h"
 #include "../dao/VentaDAO.h"
 
 #include <QAbstractItemView>
@@ -344,37 +345,53 @@ void MainWindow::loadProductos()
 void MainWindow::loadVentas()
 {
     VentaDAO dao(conexionBD.getConexionQt());
-    fillTable(ventasTable, {"ID", "Cliente", "Fecha", "Total", "Medio de pago", "Estado", "Motivo anulacion", "Fecha anulacion"}, dao.listarQt());
+    const QStringList headers = usuarioActual.esSupervisor()
+        ? QStringList{"ID", "Cliente", "Fecha", "Total", "Medio de pago", "Estado", "Motivo anulacion", "Fecha anulacion", "Creado por"}
+        : QStringList{"ID", "Cliente", "Fecha", "Total", "Medio de pago", "Estado", "Motivo anulacion", "Fecha anulacion", "Registrado por"};
+    fillTable(ventasTable, headers, dao.listarQt(usuarioActual.nombreRol, usuarioActual.idUsuario));
     ventasTable->hideColumn(6);
     ventasTable->hideColumn(7);
+    if (!usuarioActual.esSupervisor()) ventasTable->hideColumn(8);
     updateOperacionButtons(ventasTable, ventasAnularButton);
 }
 
 void MainWindow::loadServicios()
 {
     ServicioDAO dao(conexionBD.getConexionQt());
-    fillTable(serviciosTable, {"ID", "Cliente", "Instrumento", "Descripcion", "Ingreso", "Entrega", "Precio", "Estado", "Motivo anulacion", "Fecha anulacion"}, dao.listarQt());
+    const QStringList headers = usuarioActual.esSupervisor()
+        ? QStringList{"ID", "Cliente", "Instrumento", "Descripcion", "Ingreso", "Entrega", "Precio", "Estado", "Motivo anulacion", "Fecha anulacion", "Creado por"}
+        : QStringList{"ID", "Cliente", "Instrumento", "Descripcion", "Ingreso", "Entrega", "Precio", "Estado", "Motivo anulacion", "Fecha anulacion", "Registrado por"};
+    fillTable(serviciosTable, headers, dao.listarQt(usuarioActual.nombreRol, usuarioActual.idUsuario));
     serviciosTable->hideColumn(8);
     serviciosTable->hideColumn(9);
+    if (!usuarioActual.esSupervisor()) serviciosTable->hideColumn(10);
     updateOperacionButtons(serviciosTable, serviciosAnularButton, serviciosEditButton, serviciosEstadoButton);
 }
 
 void MainWindow::loadCompras()
 {
     CompraProveedorDAO dao(conexionBD.getConexionQt());
-    fillTable(comprasTable, {"ID", "Proveedor", "Fecha", "Total", "Estado", "Motivo anulacion", "Fecha anulacion"}, dao.listarQt());
+    const QStringList headers = usuarioActual.esSupervisor()
+        ? QStringList{"ID", "Proveedor", "Fecha", "Total", "Estado", "Motivo anulacion", "Fecha anulacion", "Creado por"}
+        : QStringList{"ID", "Proveedor", "Fecha", "Total", "Estado", "Motivo anulacion", "Fecha anulacion", "Registrado por"};
+    fillTable(comprasTable, headers, dao.listarQt(usuarioActual.nombreRol, usuarioActual.idUsuario));
     comprasTable->hideColumn(5);
     comprasTable->hideColumn(6);
+    if (!usuarioActual.esSupervisor()) comprasTable->hideColumn(7);
     updateOperacionButtons(comprasTable, comprasAnularButton);
 }
 
 void MainWindow::loadFacturas()
 {
     FacturaDAO dao(conexionBD.getConexionQt());
-    fillTable(facturasTable, {"ID factura", "Origen", "Operación facturada", "N.º de factura", "Tipo", "Fecha", "Total", "Estado", "Motivo anulacion", "Fecha anulacion"}, dao.listarQt());
-    facturasTable->hideColumn(8);
+    const QStringList headers = usuarioActual.esSupervisor()
+        ? QStringList{"ID factura", "Origen", "Operación facturada", "N.º de factura", "Tipo", "Fecha", "Total", "Estado", "Pago", "Motivo anulacion", "Fecha anulacion", "Creado por"}
+        : QStringList{"ID factura", "Origen", "Operación facturada", "N.º de factura", "Tipo", "Fecha", "Total", "Estado", "Pago", "Motivo anulacion", "Fecha anulacion", "Registrado por"};
+    fillTable(facturasTable, headers, dao.listarQt(usuarioActual.nombreRol, usuarioActual.idUsuario));
     facturasTable->hideColumn(9);
-    updateOperacionButtons(facturasTable, facturasAnularButton);
+    facturasTable->hideColumn(10);
+    if (!usuarioActual.esSupervisor()) facturasTable->hideColumn(11);
+    updateOperacionButtons(facturasTable, facturasAnularButton, nullptr, facturasPagoButton);
 }
 
 void MainWindow::loadConfiguracion()
@@ -407,6 +424,15 @@ void MainWindow::loadEstadosServicio()
 {
     EstadoServicioDAO dao(conexionBD.getConexionQt());
     fillTable(estadosServicioTable, {"ID", "Nombre"}, dao.listarQt());
+}
+
+void MainWindow::loadUsuarios()
+{
+    if (!usuarioActual.esSupervisor()) {
+        return;
+    }
+    UsuarioDAO dao(conexionBD.getConexionQt());
+    fillTable(usuariosTable, {"ID", "Nombre", "Apellido", "Usuario", "Rol", "Estado", "Fecha creacion"}, dao.listarUsuariosQt());
 }
 
 void MainWindow::refreshConfigTab()

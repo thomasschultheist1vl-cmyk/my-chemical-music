@@ -23,15 +23,15 @@ class CompraProveedorDAO {
 public:
 #ifdef MCM_QT_APP
     explicit CompraProveedorDAO(const QSqlDatabase &conexion) : conexionQt(conexion) {}
-    QSqlQuery listarQt() const { QSqlQuery q(conexionQt); q.exec("SELECT cp.id_compra, p.nombre, DATE_FORMAT(cp.fecha, '%d/%m/%Y'), cp.total, cp.estado, COALESCE(cp.motivo_anulacion, ''), COALESCE(DATE_FORMAT(cp.fecha_anulacion, '%d/%m/%Y %H:%i'), '') FROM compras_proveedores cp LEFT JOIN proveedores p ON cp.id_proveedor=p.id_proveedor ORDER BY cp.id_compra DESC"); return q; }
-    bool agregarQt(CompraProveedor &c) const { QSqlQuery q(conexionQt); q.prepare("INSERT INTO compras_proveedores (id_proveedor, fecha, total) VALUES (?, ?, ?)"); q.addBindValue(c.getIdProveedor()); q.addBindValue(QString::fromStdString(c.getFecha())); q.addBindValue(c.getTotal()); return q.exec(); }
+    QSqlQuery listarQt(const QString &rol = "Supervisor", int idUsuario = 0) const { QSqlQuery q(conexionQt); QString sql = "SELECT cp.id_compra, p.nombre, DATE_FORMAT(cp.fecha, '%d/%m/%Y'), cp.total, cp.estado, COALESCE(cp.motivo_anulacion, ''), COALESCE(DATE_FORMAT(cp.fecha_anulacion, '%d/%m/%Y %H:%i'), ''), COALESCE(CONCAT(u.nombre, ' ', u.apellido, ' — ', r.nombre), 'Sin usuario') FROM compras_proveedores cp LEFT JOIN proveedores p ON cp.id_proveedor=p.id_proveedor LEFT JOIN usuarios u ON cp.id_usuario=u.id_usuario LEFT JOIN roles r ON u.id_rol=r.id_rol "; if (rol == "Encargado de compras") sql += "WHERE cp.id_usuario=? OR r.nombre='Supervisor' "; sql += "ORDER BY cp.id_compra DESC"; q.prepare(sql); if (rol == "Encargado de compras") q.addBindValue(idUsuario); q.exec(); return q; }
+    bool agregarQt(CompraProveedor &c, int idUsuario = 0) const { QSqlQuery q(conexionQt); q.prepare("INSERT INTO compras_proveedores (id_proveedor, fecha, total, id_usuario) VALUES (?, ?, ?, ?)"); q.addBindValue(c.getIdProveedor()); q.addBindValue(QString::fromStdString(c.getFecha())); q.addBindValue(c.getTotal()); q.addBindValue(idUsuario > 0 ? QVariant(idUsuario) : QVariant()); return q.exec(); }
     int obtenerUltimoIdQt() const { QSqlQuery q(conexionQt); return q.exec("SELECT LAST_INSERT_ID()") && q.next() ? q.value(0).toInt() : 0; }
     bool actualizarTotalQt(int id, double total) const { QSqlQuery q(conexionQt); q.prepare("UPDATE compras_proveedores SET total=? WHERE id_compra=?"); q.addBindValue(total); q.addBindValue(id); return q.exec(); }
     bool eliminarQt(int id) const { QSqlQuery q(conexionQt); q.prepare("DELETE FROM compras_proveedores WHERE id_compra=?"); q.addBindValue(id); return q.exec(); }
     QSqlQuery detalleQt(int id) const { QSqlQuery q(conexionQt); q.prepare("SELECT cp.id_compra, p.nombre, DATE_FORMAT(cp.fecha, '%d/%m/%Y'), cp.total, cp.estado, COALESCE(cp.motivo_anulacion, ''), COALESCE(DATE_FORMAT(cp.fecha_anulacion, '%d/%m/%Y %H:%i'), '') FROM compras_proveedores cp LEFT JOIN proveedores p ON cp.id_proveedor=p.id_proveedor WHERE cp.id_compra=?"); q.addBindValue(id); q.exec(); return q; }
     QSqlQuery anulacionQt(int id) const { QSqlQuery q(conexionQt); q.prepare("SELECT estado, COALESCE(motivo_anulacion, ''), COALESCE(DATE_FORMAT(fecha_anulacion, '%d/%m/%Y %H:%i'), '') FROM compras_proveedores WHERE id_compra=?"); q.addBindValue(id); q.exec(); return q; }
     bool estaAnuladaQt(int id) const { QSqlQuery q = anulacionQt(id); return q.next() && q.value(0).toString() == "Anulada"; }
-    bool anularCompraQt(int id, const QString &motivo, QString *error = nullptr) {
+    bool anularCompraQt(int id, const QString &motivo, int idUsuarioAnulacion = 0, QString *error = nullptr) {
         auto setError = [error](const QString &texto) { if (error) *error = texto; };
         if (!conexionQt.transaction()) {
             setError(conexionQt.lastError().text());
@@ -90,8 +90,9 @@ public:
         }
 
         QSqlQuery update(conexionQt);
-        update.prepare("UPDATE compras_proveedores SET estado='Anulada', motivo_anulacion=?, fecha_anulacion=NOW() WHERE id_compra=? AND estado <> 'Anulada'");
+        update.prepare("UPDATE compras_proveedores SET estado='Anulada', motivo_anulacion=?, fecha_anulacion=NOW(), id_usuario_anulacion=? WHERE id_compra=? AND estado <> 'Anulada'");
         update.addBindValue(motivo);
+        update.addBindValue(idUsuarioAnulacion > 0 ? QVariant(idUsuarioAnulacion) : QVariant());
         update.addBindValue(id);
         if (!update.exec() || update.numRowsAffected() == 0) {
             setError(update.lastError().isValid() ? update.lastError().text() : "No se pudo anular la compra.");
@@ -106,6 +107,7 @@ public:
         }
         return true;
     }
+    bool perteneceAUsuarioOSupervisorQt(int id, int idUsuario) const { QSqlQuery q(conexionQt); q.prepare("SELECT COUNT(*) FROM compras_proveedores cp LEFT JOIN usuarios u ON cp.id_usuario=u.id_usuario LEFT JOIN roles r ON u.id_rol=r.id_rol WHERE cp.id_compra=? AND (cp.id_usuario=? OR r.nombre='Supervisor')"); q.addBindValue(id); q.addBindValue(idUsuario); return q.exec() && q.next() && q.value(0).toInt() > 0; }
     QSqlQuery ultimosQt(int limite=7) const { QSqlQuery q(conexionQt); q.prepare("SELECT id_compra, id_compra, fecha FROM compras_proveedores ORDER BY fecha DESC, id_compra DESC LIMIT ?"); q.addBindValue(limite); q.exec(); return q; }
 #endif
     bool existe(int id) {

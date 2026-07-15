@@ -66,7 +66,7 @@ void MainWindow::addCompra()
     DetalleCompraDAO detalleDao(conexionBD.getConexionQt());
     ProductoDAO productoDao(conexionBD.getConexionQt());
     CompraProveedor compraModelo(0, idProveedor, fecha.toStdString(), 0);
-    if (!compraDao.agregarQt(compraModelo)) {
+    if (!compraDao.agregarQt(compraModelo, usuarioActual.idUsuario)) {
         conexionBD.cancelarTransaccionQt();
         QMessageBox::warning(this, "Compras", "No se pudo registrar la compra.");
         return;
@@ -163,6 +163,10 @@ void MainWindow::anularCompra()
         QMessageBox::information(this, "Anular compra", "La compra seleccionada ya esta anulada.");
         return;
     }
+    if (usuarioActual.esEncargadoCompras() && !CompraProveedorDAO(conexionBD.getConexionQt()).perteneceAUsuarioOSupervisorQt(id, usuarioActual.idUsuario)) {
+        QMessageBox::warning(this, "Compras", "No podes anular una compra de otro usuario.");
+        return;
+    }
 
     QString motivo;
     if (!requestAnulacionMotivo("Anular compra", "Desea anular la compra N.º " + QString::number(id) + "?\n\nMotivo de anulacion:", motivo)) {
@@ -171,7 +175,7 @@ void MainWindow::anularCompra()
 
     CompraProveedorDAO dao(conexionBD.getConexionQt());
     QString error;
-    if (!dao.anularCompraQt(id, motivo, &error)) {
+    if (!dao.anularCompraQt(id, motivo, usuarioActual.idUsuario, &error)) {
         QMessageBox::warning(this, "Compras", "No se pudo anular la compra:\n" + error);
         return;
     }

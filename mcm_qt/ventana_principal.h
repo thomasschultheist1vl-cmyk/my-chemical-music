@@ -6,6 +6,7 @@
 #include <QList>
 #include <QStringList>
 #include "../database/ConexionBD.h"
+#include "../models/Usuario.h"
 
 class QComboBox;
 class QLabel;
@@ -29,8 +30,12 @@ class MainWindow : public QMainWindow
     Q_OBJECT
 
 public:
-    explicit MainWindow(QWidget *parent = nullptr);
+    static constexpr int CodigoCerrarSesion = 1001;
+    explicit MainWindow(const Usuario &usuario, QWidget *parent = nullptr);
     ~MainWindow() override;
+
+signals:
+    void cerrarSesionSolicitada();
 
 private:
     Ui::MainWindow *ui;
@@ -46,11 +51,13 @@ private:
     QTableWidget *marcasTable;
     QTableWidget *mediosPagoTable;
     QTableWidget *estadosServicioTable;
+    QTableWidget *usuariosTable;
     QTableWidget *movimientosTable;
     QListWidget *productosBajoStockList;
     QTabWidget *configTabs;
     QLabel *connectionLabel;
     QLabel *sectionTitle;
+    QLabel *sessionLabel;
     QLabel *clientesCountLabel;
     QLabel *productosCountLabel;
     QLabel *ventasCountLabel;
@@ -61,20 +68,47 @@ private:
     QPushButton *serviciosAnularButton;
     QPushButton *comprasAnularButton;
     QPushButton *facturasAnularButton;
+    QPushButton *facturasPagoButton;
+    QPushButton *usuariosActivarButton;
+    QPushButton *usuariosDesactivarButton;
+    QPushButton *btnClientesAdd;
+    QPushButton *btnClientesEdit;
+    QPushButton *btnClientesDelete;
+    QPushButton *btnProductosAdd;
+    QPushButton *btnProductosEdit;
+    QPushButton *btnProductosDelete;
+    QPushButton *btnVentasAdd;
+    QPushButton *btnServiciosAdd;
+    QPushButton *btnServiciosDelete;
+    QPushButton *btnComprasAdd;
+    QPushButton *btnComprasDelete;
+    QPushButton *btnFacturasAdd;
+    QPushButton *btnFacturasDelete;
+    QPushButton *btnConfigAdd;
+    QPushButton *btnConfigEdit;
+    QPushButton *btnConfigDelete;
     QList<QPushButton *> menuButtons;
+    QHash<QString, QPushButton *> menuPorModulo;
     QHash<QString, int> dashboardMaxId;
     QHash<QString, quint64> dashboardDetectedOrder;
     quint64 dashboardSequence;
     ConexionBD conexionBD;
+    Usuario usuarioActual;
 
     void buildInterface();
     QWidget *createDashboardPage();
     QWidget *createClientesPage();
     QWidget *createDataPage(QTableWidget **table, const QStringList &headers, const QString &module);
     QWidget *createConfiguracionPage();
+    QWidget *createUsuariosPage();
     QWidget *createConfigTab(QTableWidget **table, const QStringList &headers, bool hasDescription);
     QPushButton *createMenuButton(const QString &text);
     void marcarSeccionActiva(QPushButton *activeButton);
+    void aplicarPermisos();
+    void cerrarSesion();
+    bool puedeAdministrar() const;
+    bool puedeVerModulo(const QString &module) const;
+    bool puedeEditarOperacionPropia(QTableWidget *table) const;
     void connectDatabase();
     void actualizarDashboard();
     void fillTable(QTableWidget *table, const QStringList &headers, QSqlQuery query);
@@ -104,6 +138,7 @@ private:
     void loadMarcas();
     void loadMediosPago();
     void loadEstadosServicio();
+    void loadUsuarios();
     void refreshConfigTab();
     bool showClienteDialog(QString &nombre, QString &apellido, QString &telefono, QString &email, QString &direccion, QString &dni, const QString &title);
     bool showConfigDialog(QString &nombre, QString &descripcion, bool hasDescription, const QString &title);
@@ -114,6 +149,7 @@ private:
     bool showCompraHeaderDialog(int &idProveedor, QString &fecha);
     bool showCompraDetalleDialog(int &idProducto, int &cantidad, double &precioCompra);
     bool showFacturaDialog(int &idVenta, int &idServicio, QString &numeroFactura, QString &tipoFactura, QString &fecha, double &total);
+    bool showUsuarioDialog(Usuario &usuario, QString &password, bool nuevoUsuario);
     int selectedClienteId() const;
     void addCliente();
     void editCliente();
@@ -136,6 +172,12 @@ private:
     void addFactura();
     void deleteFactura();
     void anularFactura();
+    void marcarFacturaPagada();
+    void addUsuario();
+    void editUsuario();
+    void activarUsuario();
+    void desactivarUsuario();
+    void showUsuarioDetails();
     void addConfigItem();
     void editConfigItem();
     void deleteConfigItem();

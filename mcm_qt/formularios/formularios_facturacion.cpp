@@ -237,7 +237,7 @@ bool MainWindow::showFacturaDialog(int &idVenta, int &idServicio, QString &numer
 
         if (esVenta) {
             VentaDAO ventaDao(conexionBD.getConexionQt());
-            QSqlQuery query = ventaDao.disponiblesParaFacturarQt();
+            QSqlQuery query = ventaDao.disponiblesParaFacturarQt(usuarioActual.nombreRol, usuarioActual.idUsuario);
             if (query.lastError().isValid()) {
                 QMessageBox::warning(&dialog, "Base de datos", "No se pudieron cargar las ventas:\n" + query.lastError().text());
             } else {
@@ -261,7 +261,7 @@ bool MainWindow::showFacturaDialog(int &idVenta, int &idServicio, QString &numer
             }
         } else {
             ServicioDAO servicioDao(conexionBD.getConexionQt());
-            QSqlQuery query = servicioDao.disponiblesParaFacturarQt();
+            QSqlQuery query = servicioDao.disponiblesParaFacturarQt(usuarioActual.nombreRol, usuarioActual.idUsuario);
             if (query.lastError().isValid()) {
                 QMessageBox::warning(&dialog, "Base de datos", "No se pudieron cargar los servicios:\n" + query.lastError().text());
             } else {

@@ -23,14 +23,34 @@ class VentaDAO {
 public:
 #ifdef MCM_QT_APP
     explicit VentaDAO(const QSqlDatabase &conexion) : conexionQt(conexion) {}
-    QSqlQuery listarQt() const { QSqlQuery q(conexionQt); q.exec("SELECT v.id_venta, CONCAT(c.nombre, ' ', c.apellido), DATE_FORMAT(v.fecha, '%d/%m/%Y'), v.total, mp.nombre, v.estado, COALESCE(v.motivo_anulacion, ''), COALESCE(DATE_FORMAT(v.fecha_anulacion, '%d/%m/%Y %H:%i'), '') FROM ventas v LEFT JOIN clientes c ON v.id_cliente=c.id_cliente LEFT JOIN medios_pago mp ON v.id_medio_pago=mp.id_medio_pago ORDER BY v.id_venta DESC"); return q; }
-    bool agregarQt(Venta &v) const { QSqlQuery q(conexionQt); q.prepare("INSERT INTO ventas (id_cliente, fecha, total, id_medio_pago) VALUES (?, ?, ?, ?)"); q.addBindValue(v.getIdCliente()); q.addBindValue(QString::fromStdString(v.getFecha())); q.addBindValue(v.getTotal()); q.addBindValue(v.getIdMedioPago()); return q.exec(); }
+    QSqlQuery listarQt(const QString &rol = "Supervisor", int idUsuario = 0) const {
+        QSqlQuery q(conexionQt);
+        QString sql =
+            "SELECT v.id_venta, CONCAT(c.nombre, ' ', c.apellido), DATE_FORMAT(v.fecha, '%d/%m/%Y'), "
+            "v.total, mp.nombre, v.estado, COALESCE(v.motivo_anulacion, ''), "
+            "COALESCE(DATE_FORMAT(v.fecha_anulacion, '%d/%m/%Y %H:%i'), ''), "
+            "COALESCE(CONCAT(u.nombre, ' ', u.apellido, ' — ', r.nombre), 'Sin usuario') "
+            "FROM ventas v "
+            "LEFT JOIN clientes c ON v.id_cliente=c.id_cliente "
+            "LEFT JOIN medios_pago mp ON v.id_medio_pago=mp.id_medio_pago "
+            "LEFT JOIN usuarios u ON v.id_usuario=u.id_usuario "
+            "LEFT JOIN roles r ON u.id_rol=r.id_rol ";
+        if (rol == "Vendedor") {
+            sql += "WHERE v.id_usuario=? OR r.nombre='Supervisor' ";
+        }
+        sql += "ORDER BY v.id_venta DESC";
+        q.prepare(sql);
+        if (rol == "Vendedor") q.addBindValue(idUsuario);
+        q.exec();
+        return q;
+    }
+    bool agregarQt(Venta &v, int idUsuario = 0) const { QSqlQuery q(conexionQt); q.prepare("INSERT INTO ventas (id_cliente, fecha, total, id_medio_pago, id_usuario) VALUES (?, ?, ?, ?, ?)"); q.addBindValue(v.getIdCliente()); q.addBindValue(QString::fromStdString(v.getFecha())); q.addBindValue(v.getTotal()); q.addBindValue(v.getIdMedioPago()); q.addBindValue(idUsuario > 0 ? QVariant(idUsuario) : QVariant()); return q.exec(); }
     int obtenerUltimoIdQt() const { QSqlQuery q(conexionQt); return q.exec("SELECT LAST_INSERT_ID()") && q.next() ? q.value(0).toInt() : 0; }
     bool actualizarTotalQt(int id, double total) const { QSqlQuery q(conexionQt); q.prepare("UPDATE ventas SET total=? WHERE id_venta=?"); q.addBindValue(total); q.addBindValue(id); return q.exec(); }
     QSqlQuery paraComboQt() const { QSqlQuery q(conexionQt); q.exec("SELECT id_venta, CONCAT('Venta ', id_venta, ' - $', total) FROM ventas ORDER BY id_venta DESC"); return q; }
-    QSqlQuery disponiblesParaFacturarQt() const {
+    QSqlQuery disponiblesParaFacturarQt(const QString &rol = "Supervisor", int idUsuario = 0) const {
         QSqlQuery q(conexionQt);
-        q.exec(
+        QString sql =
             "SELECT v.id_venta, CONCAT(c.nombre, ' ', c.apellido), "
             "COUNT(dv.id_detalle_venta), "
             "CASE WHEN COUNT(dv.id_detalle_venta) = 1 THEN MAX(p.nombre) ELSE '' END, "
@@ -41,15 +61,20 @@ public:
             "LEFT JOIN detalle_ventas dv ON v.id_venta = dv.id_venta "
             "LEFT JOIN productos p ON dv.id_producto = p.id_producto "
             "LEFT JOIN facturas f ON v.id_venta = f.id_venta "
+            "LEFT JOIN usuarios u ON v.id_usuario = u.id_usuario "
+            "LEFT JOIN roles r ON u.id_rol = r.id_rol "
             "WHERE f.id_factura IS NULL AND v.estado = 'Confirmada' "
+            + QString(rol == "Vendedor" ? "AND (v.id_usuario=? OR r.nombre='Supervisor') " : "") +
             "GROUP BY v.id_venta, c.nombre, c.apellido, v.total "
-            "ORDER BY v.id_venta DESC"
-        );
+            "ORDER BY v.id_venta DESC";
+        q.prepare(sql);
+        if (rol == "Vendedor") q.addBindValue(idUsuario);
+        q.exec();
         return q;
     }
     QSqlQuery anulacionQt(int id) const { QSqlQuery q(conexionQt); q.prepare("SELECT estado, COALESCE(motivo_anulacion, ''), COALESCE(DATE_FORMAT(fecha_anulacion, '%d/%m/%Y %H:%i'), '') FROM ventas WHERE id_venta=?"); q.addBindValue(id); q.exec(); return q; }
     bool estaAnuladaQt(int id) const { QSqlQuery q = anulacionQt(id); return q.next() && q.value(0).toString() == "Anulada"; }
-    bool anularVentaQt(int id, const QString &motivo, QString *error = nullptr) {
+    bool anularVentaQt(int id, const QString &motivo, int idUsuarioAnulacion = 0, QString *error = nullptr) {
         auto setError = [error](const QString &texto) { if (error) *error = texto; };
         if (!conexionQt.transaction()) {
             setError(conexionQt.lastError().text());
@@ -96,8 +121,9 @@ public:
         }
 
         QSqlQuery update(conexionQt);
-        update.prepare("UPDATE ventas SET estado='Anulada', motivo_anulacion=?, fecha_anulacion=NOW() WHERE id_venta=? AND estado <> 'Anulada'");
+        update.prepare("UPDATE ventas SET estado='Anulada', motivo_anulacion=?, fecha_anulacion=NOW(), id_usuario_anulacion=? WHERE id_venta=? AND estado <> 'Anulada'");
         update.addBindValue(motivo);
+        update.addBindValue(idUsuarioAnulacion > 0 ? QVariant(idUsuarioAnulacion) : QVariant());
         update.addBindValue(id);
         if (!update.exec() || update.numRowsAffected() == 0) {
             setError(update.lastError().isValid() ? update.lastError().text() : "No se pudo anular la venta.");
@@ -111,6 +137,13 @@ public:
             return false;
         }
         return true;
+    }
+    bool perteneceAUsuarioOSupervisorQt(int id, int idUsuario) const {
+        QSqlQuery q(conexionQt);
+        q.prepare("SELECT COUNT(*) FROM ventas v LEFT JOIN usuarios u ON v.id_usuario=u.id_usuario LEFT JOIN roles r ON u.id_rol=r.id_rol WHERE v.id_venta=? AND (v.id_usuario=? OR r.nombre='Supervisor')");
+        q.addBindValue(id);
+        q.addBindValue(idUsuario);
+        return q.exec() && q.next() && q.value(0).toInt() > 0;
     }
     QSqlQuery totalQt(int id) const { QSqlQuery q(conexionQt); q.prepare("SELECT total FROM ventas WHERE id_venta=?"); q.addBindValue(id); q.exec(); return q; }
     QSqlQuery detalleQt(int id) const { QSqlQuery q(conexionQt); q.prepare("SELECT v.id_venta, CONCAT(c.nombre, ' ', c.apellido), DATE_FORMAT(v.fecha, '%d/%m/%Y'), mp.nombre, v.estado, v.total, COALESCE(v.motivo_anulacion, ''), COALESCE(DATE_FORMAT(v.fecha_anulacion, '%d/%m/%Y %H:%i'), '') FROM ventas v LEFT JOIN clientes c ON v.id_cliente=c.id_cliente LEFT JOIN medios_pago mp ON v.id_medio_pago=mp.id_medio_pago WHERE v.id_venta=?"); q.addBindValue(id); q.exec(); return q; }

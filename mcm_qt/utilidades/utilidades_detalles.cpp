@@ -371,11 +371,18 @@ void MainWindow::showFacturaDetails()
         {"Origen", origen},
         {"Operacion facturada", texto(factura.value(7))},
         {"Cliente", texto(factura.value(8))},
-        {"Total", dinero(factura.value(9).toDouble())}
+        {"Total", dinero(factura.value(9).toDouble())},
+        {"Estado de pago", texto(factura.value(12))},
+        {"Fecha de pago", texto(factura.value(13))},
+        {"Pago registrado por", texto(factura.value(14))}
     };
     if (texto(factura.value(4)) == "Anulada") {
         campos.append({"Motivo de anulacion", texto(factura.value(10))});
         campos.append({"Fecha de anulacion", texto(factura.value(11))});
+        campos.append({"Anulada por", texto(factura.value(16))});
+    }
+    if (usuarioActual.esSupervisor()) {
+        campos.append({"Creada por", texto(factura.value(15))});
     }
 
     QTextEdit *info = new QTextEdit(&dialog);

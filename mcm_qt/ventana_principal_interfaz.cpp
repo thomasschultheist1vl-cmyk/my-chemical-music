@@ -59,7 +59,7 @@ QString fechaParaBase(const QString &text)
 }
 }
 
-MainWindow::MainWindow(QWidget *parent)
+MainWindow::MainWindow(const Usuario &usuario, QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow)
     , pages(nullptr)
@@ -74,11 +74,13 @@ MainWindow::MainWindow(QWidget *parent)
     , marcasTable(nullptr)
     , mediosPagoTable(nullptr)
     , estadosServicioTable(nullptr)
+    , usuariosTable(nullptr)
     , movimientosTable(nullptr)
     , productosBajoStockList(nullptr)
     , configTabs(nullptr)
     , connectionLabel(nullptr)
     , sectionTitle(nullptr)
+    , sessionLabel(nullptr)
     , clientesCountLabel(nullptr)
     , productosCountLabel(nullptr)
     , ventasCountLabel(nullptr)
@@ -89,13 +91,34 @@ MainWindow::MainWindow(QWidget *parent)
     , serviciosAnularButton(nullptr)
     , comprasAnularButton(nullptr)
     , facturasAnularButton(nullptr)
+    , facturasPagoButton(nullptr)
+    , usuariosActivarButton(nullptr)
+    , usuariosDesactivarButton(nullptr)
+    , btnClientesAdd(nullptr)
+    , btnClientesEdit(nullptr)
+    , btnClientesDelete(nullptr)
+    , btnProductosAdd(nullptr)
+    , btnProductosEdit(nullptr)
+    , btnProductosDelete(nullptr)
+    , btnVentasAdd(nullptr)
+    , btnServiciosAdd(nullptr)
+    , btnServiciosDelete(nullptr)
+    , btnComprasAdd(nullptr)
+    , btnComprasDelete(nullptr)
+    , btnFacturasAdd(nullptr)
+    , btnFacturasDelete(nullptr)
+    , btnConfigAdd(nullptr)
+    , btnConfigEdit(nullptr)
+    , btnConfigDelete(nullptr)
     , dashboardSequence(0)
+    , usuarioActual(usuario)
 {
     // Qt carga primero la ventana base del archivo .ui. Después buildInterface()
     // construye por código el menú lateral y cada apartado de la aplicación.
     ui->setupUi(this);
     buildInterface();
     connectDatabase();
+    aplicarPermisos();
     actualizarDashboard();
     loadClientes();
 }
@@ -287,9 +310,20 @@ void MainWindow::buildInterface()
     QPushButton *btnCompras = createMenuButton("Compras");
     QPushButton *btnFacturacion = createMenuButton("Facturacion");
     QPushButton *btnConfig = createMenuButton("Datos generales");
+    QPushButton *btnUsuarios = createMenuButton("Usuarios");
+    QPushButton *btnCerrarSesion = createMenuButton("Cerrar sesión");
 
     menuButtons = {btnInicio, btnClientes, btnProductos, btnVentas,
-                   btnServicios, btnCompras, btnFacturacion, btnConfig};
+                   btnServicios, btnCompras, btnFacturacion, btnConfig, btnUsuarios, btnCerrarSesion};
+    menuPorModulo.insert("inicio", btnInicio);
+    menuPorModulo.insert("clientes", btnClientes);
+    menuPorModulo.insert("productos", btnProductos);
+    menuPorModulo.insert("ventas", btnVentas);
+    menuPorModulo.insert("servicios", btnServicios);
+    menuPorModulo.insert("compras", btnCompras);
+    menuPorModulo.insert("facturas", btnFacturacion);
+    menuPorModulo.insert("configuracion", btnConfig);
+    menuPorModulo.insert("usuarios", btnUsuarios);
 
     sidebarLayout->addWidget(btnInicio);
     sidebarLayout->addWidget(btnClientes);
@@ -299,7 +333,14 @@ void MainWindow::buildInterface()
     sidebarLayout->addWidget(btnCompras);
     sidebarLayout->addWidget(btnFacturacion);
     sidebarLayout->addWidget(btnConfig);
+    sidebarLayout->addWidget(btnUsuarios);
     sidebarLayout->addStretch();
+    sessionLabel = new QLabel(sidebar);
+    sessionLabel->setWordWrap(true);
+    sessionLabel->setStyleSheet("color: #d1d5db; font-size: 12px; padding: 8px 4px;");
+    sessionLabel->setText(usuarioActual.nombreCompleto() + "\n" + usuarioActual.nombreRol + "\n@" + usuarioActual.nombreUsuario);
+    sidebarLayout->addWidget(sessionLabel);
+    sidebarLayout->addWidget(btnCerrarSesion);
 
     // ÁREA DERECHA: contiene el título, el estado de conexión y las pantallas.
     QWidget *content = new QWidget(root);
@@ -335,9 +376,11 @@ void MainWindow::buildInterface()
     // Índice 5: Compras.
     pages->addWidget(createDataPage(&comprasTable, {"ID", "Proveedor", "Fecha", "Total", "Estado", "Motivo anulacion", "Fecha anulacion"}, "compras"));
     // Índice 6: Facturación.
-    pages->addWidget(createDataPage(&facturasTable, {"ID factura", "Origen", "Operación facturada", "N.º de factura", "Tipo", "Fecha", "Total", "Estado", "Motivo anulacion", "Fecha anulacion"}, "facturas"));
+    pages->addWidget(createDataPage(&facturasTable, {"ID factura", "Origen", "Operación facturada", "N.º de factura", "Tipo", "Fecha", "Total", "Estado", "Pago", "Motivo anulacion", "Fecha anulacion"}, "facturas"));
     // Índice 7: Datos generales.
     pages->addWidget(createConfiguracionPage());
+    // Índice 8: Usuarios.
+    pages->addWidget(createUsuariosPage());
 
     contentLayout->addLayout(headerLayout);
     contentLayout->addWidget(pages);
@@ -398,6 +441,13 @@ void MainWindow::buildInterface()
         marcarSeccionActiva(btnConfig);
         loadConfiguracion();
     });
+    connect(btnUsuarios, &QPushButton::clicked, this, [this, btnUsuarios]() {
+        sectionTitle->setText("Usuarios");
+        pages->setCurrentIndex(8);
+        marcarSeccionActiva(btnUsuarios);
+        loadUsuarios();
+    });
+    connect(btnCerrarSesion, &QPushButton::clicked, this, &MainWindow::cerrarSesion);
 }
 
 // ============================== INICIO ==============================
@@ -543,6 +593,9 @@ QWidget *MainWindow::createClientesPage()
     btnDelete->setObjectName("secondaryButton");
     QPushButton *btnDetails = new QPushButton("Ver detalles", page);
     btnDetails->setObjectName("secondaryButton");
+    btnClientesAdd = btnAdd;
+    btnClientesEdit = btnEdit;
+    btnClientesDelete = btnDelete;
 
     toolbar->addWidget(search, 1);
     toolbar->addWidget(btnRefresh);
@@ -632,11 +685,14 @@ QWidget *MainWindow::createDataPage(QTableWidget **table, const QStringList &hea
         btnDelete->hide();
         btnAnular->setText("Anular venta");
         ventasAnularButton = btnAnular;
+        btnVentasAdd = btnAdd;
         btnExtra->hide();
     } else if (module == "servicios") {
         btnAdd->setText("Registrar servicio");
         btnAnular->setText("Anular servicio");
+        btnServiciosAdd = btnAdd;
         serviciosEditButton = btnEdit;
+        btnServiciosDelete = btnDelete;
         serviciosAnularButton = btnAnular;
         serviciosEstadoButton = btnExtra;
         btnExtra->setText("Cambiar estado");
@@ -644,6 +700,8 @@ QWidget *MainWindow::createDataPage(QTableWidget **table, const QStringList &hea
         btnAdd->setText("Registrar compra");
         btnEdit->hide();
         btnAnular->setText("Anular compra");
+        btnComprasAdd = btnAdd;
+        btnComprasDelete = btnDelete;
         comprasAnularButton = btnAnular;
         btnExtra->hide();
     } else if (module == "facturas") {
@@ -651,8 +709,16 @@ QWidget *MainWindow::createDataPage(QTableWidget **table, const QStringList &hea
         btnEdit->hide();
         btnAnular->setText("Anular factura");
         facturasAnularButton = btnAnular;
-        btnExtra->hide();
+        facturasPagoButton = btnExtra;
+        btnFacturasAdd = btnAdd;
+        btnFacturasDelete = btnDelete;
+        btnExtra->setText("Marcar como pagada");
     } else {
+        if (module == "productos") {
+            btnProductosAdd = btnAdd;
+            btnProductosEdit = btnEdit;
+            btnProductosDelete = btnDelete;
+        }
         btnAnular->hide();
         btnExtra->hide();
     }
@@ -734,6 +800,7 @@ QWidget *MainWindow::createDataPage(QTableWidget **table, const QStringList &hea
 
     connect(btnExtra, &QPushButton::clicked, this, [this, module]() {
         if (module == "servicios") changeServicioEstado();
+        else if (module == "facturas") marcarFacturaPagada();
     });
 
     connect(currentTable, &QTableWidget::cellDoubleClicked, this, [this, module](int, int) {
@@ -749,9 +816,9 @@ QWidget *MainWindow::createDataPage(QTableWidget **table, const QStringList &hea
             if (module == "ventas") updateOperacionButtons(currentTable, ventasAnularButton);
             else if (module == "servicios") updateOperacionButtons(currentTable, serviciosAnularButton, serviciosEditButton, serviciosEstadoButton);
             else if (module == "compras") updateOperacionButtons(currentTable, comprasAnularButton);
-            else if (module == "facturas") updateOperacionButtons(currentTable, facturasAnularButton);
+            else if (module == "facturas") updateOperacionButtons(currentTable, facturasAnularButton, nullptr, facturasPagoButton);
         });
-        updateOperacionButtons(currentTable, btnAnular, module == "servicios" ? btnEdit : nullptr, module == "servicios" ? btnExtra : nullptr);
+        updateOperacionButtons(currentTable, btnAnular, module == "servicios" ? btnEdit : nullptr, (module == "servicios" || module == "facturas") ? btnExtra : nullptr);
     }
 
     return page;
@@ -777,6 +844,9 @@ QWidget *MainWindow::createConfiguracionPage()
     btnDelete->setObjectName("secondaryButton");
     QPushButton *btnDetails = new QPushButton("Ver detalles", page);
     btnDetails->setObjectName("secondaryButton");
+    btnConfigAdd = btnAdd;
+    btnConfigEdit = btnEdit;
+    btnConfigDelete = btnDelete;
 
     // Cada pestaña recibe su propia tabla, columnas y buscador.
     configTabs = new QTabWidget(page);
@@ -817,6 +887,80 @@ QWidget *MainWindow::createConfiguracionPage()
     connect(marcasTable, &QTableWidget::cellDoubleClicked, this, [this](int, int) { showConfigDetails(); });
     connect(mediosPagoTable, &QTableWidget::cellDoubleClicked, this, [this](int, int) { showConfigDetails(); });
     connect(estadosServicioTable, &QTableWidget::cellDoubleClicked, this, [this](int, int) { showConfigDetails(); });
+
+    return page;
+}
+
+// ============================== USUARIOS ==============================
+// Apartado administrativo visible únicamente para Supervisor.
+QWidget *MainWindow::createUsuariosPage()
+{
+    QWidget *page = new QWidget;
+    QVBoxLayout *layout = new QVBoxLayout(page);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(14);
+
+    QHBoxLayout *toolbar = new QHBoxLayout;
+    QLineEdit *search = new QLineEdit(page);
+    search->setPlaceholderText("Buscar usuario...");
+
+    QPushButton *btnRefresh = new QPushButton("Actualizar", page);
+    btnRefresh->setObjectName("primaryButton");
+    QPushButton *btnDetails = new QPushButton("Ver detalles", page);
+    btnDetails->setObjectName("secondaryButton");
+    QPushButton *btnAdd = new QPushButton("Agregar", page);
+    btnAdd->setObjectName("secondaryButton");
+    QPushButton *btnEdit = new QPushButton("Modificar", page);
+    btnEdit->setObjectName("secondaryButton");
+    usuariosActivarButton = new QPushButton("Activar", page);
+    usuariosActivarButton->setObjectName("secondaryButton");
+    usuariosDesactivarButton = new QPushButton("Desactivar", page);
+    usuariosDesactivarButton->setObjectName("secondaryButton");
+
+    toolbar->addWidget(search, 1);
+    toolbar->addWidget(btnRefresh);
+    toolbar->addWidget(btnDetails);
+    toolbar->addWidget(btnAdd);
+    toolbar->addWidget(btnEdit);
+    toolbar->addWidget(usuariosActivarButton);
+    toolbar->addWidget(usuariosDesactivarButton);
+
+    usuariosTable = new QTableWidget(page);
+    usuariosTable->setColumnCount(7);
+    usuariosTable->setHorizontalHeaderLabels({"ID", "Nombre", "Apellido", "Usuario", "Rol", "Estado", "Fecha creacion"});
+    usuariosTable->horizontalHeader()->setStretchLastSection(true);
+    usuariosTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+    usuariosTable->verticalHeader()->setVisible(false);
+    usuariosTable->setAlternatingRowColors(true);
+    usuariosTable->setSelectionBehavior(QAbstractItemView::SelectRows);
+    usuariosTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
+
+    layout->addLayout(toolbar);
+    layout->addWidget(usuariosTable);
+
+    connect(btnRefresh, &QPushButton::clicked, this, &MainWindow::loadUsuarios);
+    connect(btnDetails, &QPushButton::clicked, this, &MainWindow::showUsuarioDetails);
+    connect(btnAdd, &QPushButton::clicked, this, &MainWindow::addUsuario);
+    connect(btnEdit, &QPushButton::clicked, this, &MainWindow::editUsuario);
+    connect(usuariosActivarButton, &QPushButton::clicked, this, &MainWindow::activarUsuario);
+    connect(usuariosDesactivarButton, &QPushButton::clicked, this, &MainWindow::desactivarUsuario);
+    connect(usuariosTable, &QTableWidget::cellDoubleClicked, this, [this](int, int) { showUsuarioDetails(); });
+    connect(usuariosTable, &QTableWidget::itemSelectionChanged, this, [this]() {
+        const bool haySeleccion = usuariosTable && usuariosTable->currentRow() >= 0;
+        if (!usuariosActivarButton || !usuariosDesactivarButton) return;
+        usuariosActivarButton->setEnabled(haySeleccion);
+        usuariosDesactivarButton->setEnabled(haySeleccion);
+    });
+    connect(search, &QLineEdit::textChanged, this, [this](const QString &text) {
+        for (int row = 0; row < usuariosTable->rowCount(); ++row) {
+            bool match = text.trimmed().isEmpty();
+            for (int col = 0; col < usuariosTable->columnCount() && !match; ++col) {
+                QTableWidgetItem *item = usuariosTable->item(row, col);
+                match = item && item->text().contains(text, Qt::CaseInsensitive);
+            }
+            usuariosTable->setRowHidden(row, !match);
+        }
+    });
 
     return page;
 }
@@ -886,6 +1030,74 @@ void MainWindow::marcarSeccionActiva(QPushButton *activeButton)
         button->style()->polish(button);
         button->update();
     }
+}
+
+bool MainWindow::puedeAdministrar() const
+{
+    return usuarioActual.esSupervisor();
+}
+
+bool MainWindow::puedeVerModulo(const QString &module) const
+{
+    if (usuarioActual.esSupervisor()) return true;
+    if (usuarioActual.esVendedor()) {
+        return module == "inicio" || module == "clientes" || module == "productos"
+            || module == "ventas" || module == "servicios" || module == "facturas"
+            || module == "configuracion";
+    }
+    if (usuarioActual.esEncargadoCompras()) {
+        return module == "inicio" || module == "productos" || module == "compras"
+            || module == "configuracion";
+    }
+    return false;
+}
+
+void MainWindow::aplicarPermisos()
+{
+    for (auto it = menuPorModulo.begin(); it != menuPorModulo.end(); ++it) {
+        it.value()->setVisible(puedeVerModulo(it.key()));
+    }
+
+    const bool supervisor = usuarioActual.esSupervisor();
+    const bool vendedor = usuarioActual.esVendedor();
+    const bool compras = usuarioActual.esEncargadoCompras();
+
+    if (btnClientesAdd) btnClientesAdd->setVisible(supervisor || vendedor);
+    if (btnClientesEdit) btnClientesEdit->setVisible(supervisor || vendedor);
+    if (btnClientesDelete) btnClientesDelete->setVisible(supervisor);
+
+    if (btnProductosAdd) btnProductosAdd->setVisible(supervisor || compras);
+    if (btnProductosEdit) btnProductosEdit->setVisible(supervisor || compras);
+    if (btnProductosDelete) btnProductosDelete->setVisible(supervisor);
+
+    if (btnVentasAdd) btnVentasAdd->setVisible(supervisor || vendedor);
+    if (ventasAnularButton) ventasAnularButton->setVisible(supervisor || vendedor);
+
+    if (btnServiciosAdd) btnServiciosAdd->setVisible(supervisor || vendedor);
+    if (serviciosEditButton) serviciosEditButton->setVisible(supervisor || vendedor);
+    if (serviciosEstadoButton) serviciosEstadoButton->setVisible(supervisor || vendedor);
+    if (serviciosAnularButton) serviciosAnularButton->setVisible(supervisor || vendedor);
+    if (btnServiciosDelete) btnServiciosDelete->setVisible(supervisor);
+
+    if (btnComprasAdd) btnComprasAdd->setVisible(supervisor || compras);
+    if (comprasAnularButton) comprasAnularButton->setVisible(supervisor || compras);
+    if (btnComprasDelete) btnComprasDelete->setVisible(supervisor);
+
+    if (btnFacturasAdd) btnFacturasAdd->setVisible(supervisor || vendedor);
+    if (facturasAnularButton) facturasAnularButton->setVisible(supervisor || vendedor);
+    if (facturasPagoButton) facturasPagoButton->setVisible(supervisor || vendedor);
+    if (btnFacturasDelete) btnFacturasDelete->setVisible(supervisor);
+
+    if (btnConfigAdd) btnConfigAdd->setVisible(supervisor);
+    if (btnConfigEdit) btnConfigEdit->setVisible(supervisor);
+    if (btnConfigDelete) btnConfigDelete->setVisible(supervisor);
+}
+
+void MainWindow::cerrarSesion()
+{
+    usuarioActual = Usuario();
+    close();
+    QApplication::exit(CodigoCerrarSesion);
 }
 
 

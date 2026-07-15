@@ -61,7 +61,7 @@ void MainWindow::addServicio()
 
     Servicio servicio(0, idCliente, instrumento.toStdString(), descripcion.toStdString(), fechaIngreso.toStdString(), fechaEntrega.toStdString(), precio, idEstadoServicio);
     ServicioDAO dao(conexionBD.getConexionQt());
-    if (!dao.agregarQt(servicio)) {
+    if (!dao.agregarQt(servicio, usuarioActual.idUsuario)) {
         QMessageBox::warning(this, "Servicios", "No se pudo registrar el servicio.");
         return;
     }
@@ -84,6 +84,10 @@ void MainWindow::editServicio()
     }
     if (selectedRowIsAnulada(serviciosTable)) {
         QMessageBox::information(this, "Modificar servicio", "No se puede modificar un servicio anulado.");
+        return;
+    }
+    if (usuarioActual.esVendedor() && !ServicioDAO(conexionBD.getConexionQt()).perteneceAUsuarioOSupervisorQt(id, usuarioActual.idUsuario)) {
+        QMessageBox::warning(this, "Servicios", "No podes modificar un servicio de otro usuario.");
         return;
     }
 
@@ -157,6 +161,10 @@ void MainWindow::changeServicioEstado()
         QMessageBox::information(this, "Cambiar estado", "No se puede cambiar el estado de un servicio anulado.");
         return;
     }
+    if (usuarioActual.esVendedor() && !ServicioDAO(conexionBD.getConexionQt()).perteneceAUsuarioOSupervisorQt(id, usuarioActual.idUsuario)) {
+        QMessageBox::warning(this, "Servicios", "No podes cambiar el estado de un servicio de otro usuario.");
+        return;
+    }
 
     QDialog dialog(this);
     dialog.setWindowTitle("Cambiar estado del servicio");
@@ -212,6 +220,10 @@ void MainWindow::anularServicio()
         QMessageBox::information(this, "Anular servicio", "El servicio seleccionado ya esta anulado.");
         return;
     }
+    if (usuarioActual.esVendedor() && !ServicioDAO(conexionBD.getConexionQt()).perteneceAUsuarioOSupervisorQt(id, usuarioActual.idUsuario)) {
+        QMessageBox::warning(this, "Servicios", "No podes anular un servicio de otro usuario.");
+        return;
+    }
 
     QString motivo;
     if (!requestAnulacionMotivo("Anular servicio", "Desea anular el servicio N.º " + QString::number(id) + "?\n\nMotivo de anulacion:", motivo)) {
@@ -220,7 +232,7 @@ void MainWindow::anularServicio()
 
     ServicioDAO dao(conexionBD.getConexionQt());
     QString error;
-    if (!dao.anularServicioQt(id, motivo, &error)) {
+    if (!dao.anularServicioQt(id, motivo, usuarioActual.idUsuario, &error)) {
         QMessageBox::warning(this, "Servicios", "No se pudo anular el servicio:\n" + error);
         return;
     }

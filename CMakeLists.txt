@@ -29,6 +29,8 @@ set_source_files_properties(
 
 set(PROJECT_SOURCES
     mcm_qt/inicio_aplicacion.cpp
+    mcm_qt/login_dialog.cpp
+    mcm_qt/login_dialog.h
     mcm_qt/ventana_principal_interfaz.cpp
     mcm_qt/ventana_principal_datos.cpp
     mcm_qt/acciones/acciones_clientes.cpp
@@ -38,6 +40,7 @@ set(PROJECT_SOURCES
     mcm_qt/acciones/acciones_compras.cpp
     mcm_qt/acciones/acciones_facturacion.cpp
     mcm_qt/acciones/acciones_datos_generales.cpp
+    mcm_qt/acciones/acciones_usuarios.cpp
     mcm_qt/formularios/formularios_clientes.cpp
     mcm_qt/formularios/formularios_productos.cpp
     mcm_qt/formularios/formularios_ventas.cpp
@@ -65,6 +68,7 @@ set(PROJECT_SOURCES
     dao/ProductoDAO.h
     dao/ProveedorDAO.h
     dao/ServicioDAO.h
+    dao/UsuarioDAO.h
     dao/VentaDAO.h
 
     database/ConexionBD.h
@@ -100,6 +104,7 @@ set(PROJECT_SOURCES
     models/Producto.h
     models/Proveedor.h
     models/Servicio.h
+    models/Usuario.h
     models/Venta.h
 )
 

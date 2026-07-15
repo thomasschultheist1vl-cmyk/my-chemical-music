@@ -146,6 +146,12 @@ void MainWindow::updateOperacionButtons(QTableWidget *table, QPushButton *anular
 {
     const bool haySeleccion = table && table->currentRow() >= 0;
     const bool anulada = haySeleccion && selectedRowIsAnulada(table);
+    bool pagada = false;
+    if (haySeleccion) {
+        const int pagoCol = columnIndex(table, "Pago");
+        pagada = pagoCol >= 0 && table->item(table->currentRow(), pagoCol)
+            && table->item(table->currentRow(), pagoCol)->text().trimmed() == "Pagada";
+    }
 
     if (anularButton) {
         anularButton->setEnabled(haySeleccion && !anulada);
@@ -154,7 +160,7 @@ void MainWindow::updateOperacionButtons(QTableWidget *table, QPushButton *anular
         editButton->setEnabled(!anulada);
     }
     if (stateButton) {
-        stateButton->setEnabled(!anulada);
+        stateButton->setEnabled(haySeleccion && !anulada && !pagada);
     }
 }
 
